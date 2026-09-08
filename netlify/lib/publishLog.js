@@ -1,14 +1,14 @@
-// يسجّل كل كتاب يُنشر فعليًا حتى نستطيع تنبيه المستخدم إن حاول نشر نفس
-// الكتاب مرة أخرى. نستخدم Netlify Blobs لأنه التخزين الوحيد المتاح لدوال
-// Netlify الذي يبقى بين استدعاء وآخر (خلافًا للذاكرة العادية التي تُفرَّغ
-// مع كل استدعاء منفصل للدالة).
+// Records every book that actually gets published so we can warn the user if they try to
+// publish the same book again. We use Netlify Blobs because it's the only storage available
+// to Netlify functions that persists between calls (unlike regular memory, which is cleared
+// on each separate function invocation).
 
 const crypto = require("crypto");
 const { connectLambda, getStore } = require("@netlify/blobs");
 
-// مفتاح ثابت الطول لكل كتاب: نعتمد رابط التحميل إن وُجد (لأنه الأكثر
-// تحديدًا لنسخة بعينها)، وإلا نجمع العنوان والمؤلف والمصدر كبديل لكتاب
-// نُشر بغلافه فقط بلا ملف.
+// Fixed-length key per book: we use the download URL if it exists (since it's the most
+// specific to a particular edition), otherwise we combine title, author, and source as a
+// fallback for a book published with just its cover, no file.
 function keyFor(book) {
   const raw = book.download_url || `${book.source}::${book.title}::${book.author}`;
   return crypto.createHash("sha256").update(raw).digest("hex");
