@@ -131,6 +131,12 @@ select:focus, input:focus, button:focus {
 .search-row { display: flex; gap: 8px; }
 .search-row input { flex: 1; }
 
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+}
+
 .btn-primary, .btn-ghost {
   font-family: var(--font-body);
   font-size: 0.95rem;
@@ -270,6 +276,16 @@ select:focus, input:focus, button:focus {
   margin: 0 0 16px;
   color: var(--stamp);
 }
+.preview-duplicate-warning {
+  font-size: 0.88rem;
+  margin: 0 0 16px;
+  padding: 8px 10px;
+  background: #F3E4D8;
+  border: 1px solid var(--stamp);
+  border-radius: 2px;
+  color: var(--stamp);
+}
+.preview-duplicate-warning.hidden { display: none; }
 .preview-actions {
   display: flex;
   gap: 10px;

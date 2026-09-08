@@ -22,7 +22,7 @@
     </header>
 
     <section class="controls" id="controls">
-      <div class="field">
+      <div class="field" id="sourceField">
         <label for="sourceSelect">المصدر</label>
         <select id="sourceSelect"></select>
       </div>
@@ -30,6 +30,7 @@
       <div class="mode-tabs" role="tablist">
         <button class="tab active" data-mode="browse" role="tab">تصفّح الأقسام</button>
         <button class="tab" data-mode="search" role="tab">بحث بالاسم</button>
+        <button class="tab" data-mode="collection" role="tab">مجموعة Archive.org</button>
       </div>
 
       <div class="field" id="categoryField">
@@ -43,6 +44,18 @@
           <input id="searchInput" type="text" placeholder="مثال: Jane Austen" />
           <button id="searchBtn" class="btn-primary">بحث</button>
         </div>
+      </div>
+
+      <div class="field hidden" id="collectionField">
+        <label for="collectionInput">معرّف المجموعة (collection identifier)</label>
+        <div class="search-row">
+          <input id="collectionInput" type="text" placeholder="مثال: ukrainian-literature-school-curriculum" />
+          <button id="collectionBtn" class="btn-primary">تصفّح</button>
+        </div>
+        <p class="field-hint">
+          يمكنك أخذ المعرّف من رابط أي مجموعة على archive.org، مثل الجزء الأخير من
+          archive.org/details/&lt;المعرّف&gt;
+        </p>
       </div>
     </section>
 
@@ -66,6 +79,7 @@
           <h2 id="previewTitle"></h2>
           <p id="previewAuthor" class="preview-author"></p>
           <p id="previewFileState" class="preview-file-state"></p>
+          <p id="previewDuplicateWarning" class="preview-duplicate-warning hidden"></p>
           <div class="preview-actions">
             <button id="publishBtn" class="btn-primary">نشر على القناة</button>
             <button id="publishCoverOnlyBtn" class="btn-ghost hidden">نشر الغلاف فقط</button>
