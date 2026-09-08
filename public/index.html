@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>فهرس الكتب — ناشر تيليجرام</title>
+<title>Book Index — Telegram Publisher</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
@@ -13,48 +13,52 @@
     <span>Gutenberg</span>
     <span>Open Library</span>
     <span>Internet Archive</span>
+    <span>OAPEN</span>
+    <span>Google Books</span>
+    <span>DOAB</span>
   </div>
 
   <main class="catalog">
     <header class="catalog-head">
-      <h1>فهرس الكتب</h1>
-      <p class="subhead">تصفّح، اختر، وانشر على القناة — بلا سطر أوامر</p>
+      <h1>Book Index</h1>
+      <p class="subhead">Browse, pick, and publish to the channel — no command line needed</p>
     </header>
 
     <section class="controls" id="controls">
       <div class="field" id="sourceField">
-        <label for="sourceSelect">المصدر</label>
+        <label for="sourceSelect">Source</label>
         <select id="sourceSelect"></select>
       </div>
 
       <div class="mode-tabs" role="tablist">
-        <button class="tab active" data-mode="browse" role="tab">تصفّح الأقسام</button>
-        <button class="tab" data-mode="search" role="tab">بحث بالاسم</button>
-        <button class="tab" data-mode="collection" role="tab">مجموعة Archive.org</button>
+        <button class="tab active" data-mode="browse" role="tab">Browse Categories</button>
+        <button class="tab" data-mode="search" role="tab">Search by Name</button>
+        <button class="tab" data-mode="collection" role="tab">Archive.org Collection</button>
       </div>
 
       <div class="field" id="categoryField">
-        <label for="categorySelect">القسم</label>
+        <label for="categorySelect">Category</label>
         <select id="categorySelect"></select>
       </div>
 
       <div class="field hidden" id="searchField">
-        <label for="searchInput">اسم الكتاب أو المؤلف</label>
+        <label for="searchInput">Book title or author</label>
         <div class="search-row">
-          <input id="searchInput" type="text" placeholder="مثال: Jane Austen" />
-          <button id="searchBtn" class="btn-primary">بحث</button>
+          <input id="searchInput" type="text" placeholder="e.g. Jane Austen" />
+          <button id="searchBtn" class="btn-primary">Search</button>
         </div>
+        <p class="field-hint">Tip: pick "🌐 All Sources" above to search every source at once.</p>
       </div>
 
       <div class="field hidden" id="collectionField">
-        <label for="collectionInput">معرّف المجموعة (collection identifier)</label>
+        <label for="collectionInput">Collection identifier</label>
         <div class="search-row">
-          <input id="collectionInput" type="text" placeholder="مثال: ukrainian-literature-school-curriculum" />
-          <button id="collectionBtn" class="btn-primary">تصفّح</button>
+          <input id="collectionInput" type="text" placeholder="e.g. ukrainian-literature-school-curriculum" />
+          <button id="collectionBtn" class="btn-primary">Browse</button>
         </div>
         <p class="field-hint">
-          يمكنك أخذ المعرّف من رابط أي مجموعة على archive.org، مثل الجزء الأخير من
-          archive.org/details/&lt;المعرّف&gt;
+          You can grab the identifier from any collection's URL on archive.org — it's the last part of
+          archive.org/details/&lt;identifier&gt;
         </p>
       </div>
     </section>
@@ -62,27 +66,39 @@
     <section class="results-wrap">
       <p id="statusLine" class="status-line"></p>
       <ol id="resultsList" class="card-index"></ol>
-      <button id="nextPageBtn" class="btn-ghost hidden">الصفحة التالية ↺</button>
+      <button id="nextPageBtn" class="btn-ghost hidden">Next page ↺</button>
     </section>
   </main>
 
   <div id="previewOverlay" class="overlay hidden">
     <div class="preview-card">
-      <button id="closePreview" class="close-x" aria-label="إغلاق">✕</button>
+      <button id="closePreview" class="close-x" aria-label="Close">✕</button>
       <div class="preview-body">
         <div class="preview-cover">
           <img id="previewCoverImg" alt="" />
-          <div id="previewCoverFallback" class="cover-fallback hidden">لا يوجد غلاف</div>
+          <div id="previewCoverFallback" class="cover-fallback hidden">No cover available</div>
         </div>
         <div class="preview-info">
           <p class="preview-source" id="previewSource"></p>
           <h2 id="previewTitle"></h2>
           <p id="previewAuthor" class="preview-author"></p>
+          <p id="previewDescription" class="preview-description hidden"></p>
           <p id="previewFileState" class="preview-file-state"></p>
+          <div id="fileTypeChoice" class="file-type-choice hidden">
+            <span class="file-type-label">Choose publish format:</span>
+            <label class="file-type-option">
+              <input type="radio" name="fileType" id="fileTypePdf" value="pdf" checked />
+              PDF
+            </label>
+            <label class="file-type-option">
+              <input type="radio" name="fileType" id="fileTypeEpub" value="epub" />
+              EPUB
+            </label>
+          </div>
           <p id="previewDuplicateWarning" class="preview-duplicate-warning hidden"></p>
           <div class="preview-actions">
-            <button id="publishBtn" class="btn-primary">نشر على القناة</button>
-            <button id="publishCoverOnlyBtn" class="btn-ghost hidden">نشر الغلاف فقط</button>
+            <button id="publishBtn" class="btn-primary">Publish to Channel</button>
+            <button id="publishCoverOnlyBtn" class="btn-ghost hidden">Publish Cover Only</button>
           </div>
           <p id="publishResult" class="publish-result"></p>
         </div>

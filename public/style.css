@@ -271,6 +271,18 @@ select:focus, input:focus, button:focus {
   color: var(--ink-soft);
   margin: 0 0 10px;
 }
+.preview-description {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 14px;
+  padding-inline-start: 10px;
+  border-inline-start: 3px solid var(--rule);
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-line;
+}
+.preview-description.hidden { display: none; }
 .preview-file-state {
   font-size: 0.88rem;
   margin: 0 0 16px;
@@ -286,6 +298,29 @@ select:focus, input:focus, button:focus {
   color: var(--stamp);
 }
 .preview-duplicate-warning.hidden { display: none; }
+
+.file-type-choice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font-size: 0.9rem;
+}
+.file-type-choice.hidden { display: none; }
+.file-type-label { color: var(--ink-soft); }
+.file-type-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.file-type-option input { cursor: pointer; }
 .preview-actions {
   display: flex;
   gap: 10px;
