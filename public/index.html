@@ -72,7 +72,9 @@
 
   <div id="previewOverlay" class="overlay hidden">
     <div class="preview-card">
-      <button id="closePreview" class="close-x" aria-label="Close">✕</button>
+      <div class="preview-card-header">
+        <button id="closePreview" class="close-x" aria-label="Close">✕</button>
+      </div>
       <div class="preview-body">
         <div class="preview-cover">
           <img id="previewCoverImg" alt="" />
@@ -84,6 +86,7 @@
           <p id="previewAuthor" class="preview-author"></p>
           <p id="previewDescription" class="preview-description hidden"></p>
           <p id="previewFileState" class="preview-file-state"></p>
+          <p id="previewFileSize" class="preview-file-size hidden"></p>
           <div id="fileTypeChoice" class="file-type-choice hidden">
             <span class="file-type-label">Choose publish format:</span>
             <label class="file-type-option">

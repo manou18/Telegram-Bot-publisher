@@ -22,6 +22,7 @@ const previewTitle = document.getElementById("previewTitle");
 const previewAuthor = document.getElementById("previewAuthor");
 const previewDescription = document.getElementById("previewDescription");
 const previewFileState = document.getElementById("previewFileState");
+const previewFileSize = document.getElementById("previewFileSize");
 const fileTypeChoice = document.getElementById("fileTypeChoice");
 const fileTypePdf = document.getElementById("fileTypePdf");
 const fileTypeEpub = document.getElementById("fileTypeEpub");
@@ -48,6 +49,27 @@ let currentItem = null; // the raw currently selected item (sent as-is to previe
 let currentItemSource = null; // the source id associated with currentItem when it was picked
 let forceRepublish = false; // true if the user confirmed republishing an already-published book
 let selectedFileType = null; // "pdf" | "epub" | null — the chosen format for publishing
+let fileSizes = { pdf: null, epub: null }; // bytes, populated from the preview response
+
+function formatFileSize(bytes) {
+  if (!bytes) return null;
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function updateFileSizeDisplay() {
+  const bytes = selectedFileType ? fileSizes[selectedFileType] : null;
+  const formatted = formatFileSize(bytes);
+  if (!formatted) {
+    previewFileSize.classList.add("hidden");
+    previewFileSize.textContent = "";
+    return;
+  }
+  const label = selectedFileType ? selectedFileType.toUpperCase() : "";
+  previewFileSize.textContent = `📦 Size: ${formatted}${fileTypeChoice.classList.contains("hidden") ? "" : ` (${label})`}`;
+  previewFileSize.classList.remove("hidden");
+}
 
 async function jsonFetch(url, opts) {
   const r = await fetch(url, opts);
@@ -217,12 +239,15 @@ async function openPreview(item, sourceId) {
   currentItemSource = sourceId;
   forceRepublish = false;
   selectedFileType = null;
+  fileSizes = { pdf: null, epub: null };
   overlay.classList.remove("hidden");
   previewTitle.textContent = "Loading…";
   previewAuthor.textContent = "";
   previewDescription.textContent = "";
   previewDescription.classList.add("hidden");
   previewFileState.textContent = "";
+  previewFileSize.textContent = "";
+  previewFileSize.classList.add("hidden");
   fileTypeChoice.classList.add("hidden");
   fileTypePdf.checked = true;
   previewDuplicateWarning.classList.add("hidden");
@@ -267,6 +292,7 @@ async function openPreview(item, sourceId) {
 
     const hasPdf = !!book.download_url_pdf;
     const hasEpub = !!book.download_url_epub;
+    fileSizes = { pdf: book.file_size_pdf || null, epub: book.file_size_epub || null };
 
     if (hasPdf && hasEpub) {
       // available in both formats — show the file type and let the user choose
@@ -293,6 +319,7 @@ async function openPreview(item, sourceId) {
       publishCoverOnlyBtn.classList.remove("hidden");
       publishCoverOnlyBtn.textContent = book.already_published ? "Publish Cover Anyway" : "Publish Cover Only";
     }
+    updateFileSizeDisplay();
   } catch (e) {
     previewTitle.textContent = "Failed to load details";
     previewAuthor.textContent = e.message;
@@ -381,9 +408,11 @@ publishBtn.addEventListener("click", () => publish(false));
 publishCoverOnlyBtn.addEventListener("click", () => publish(true));
 fileTypePdf.addEventListener("change", () => {
   if (fileTypePdf.checked) selectedFileType = "pdf";
+  updateFileSizeDisplay();
 });
 fileTypeEpub.addEventListener("change", () => {
   if (fileTypeEpub.checked) selectedFileType = "epub";
+  updateFileSizeDisplay();
 });
 
 (async function init() {
