@@ -1,18 +1,18 @@
 const { SOURCES, archiveEduAdvancedSearch } = require("../lib/sources");
 
-// يستخدم بنية بحث Archive.org نفسها المستخدمة في المصدر الثالث (تربية
-// وتعليم)، لكن بدل عبارة بحث حرة، يستخدم "collection:(المعرّف)" ليعرض
-// محتوى مجموعة محددة بالضبط أدخلها المستخدم يدويًا (مثل
-// ukrainian-literature-school-curriculum أو أي معرّف آخر من archive.org).
-// النتائج تُبنى دائمًا عبر منطق المصدر 3 (buildBook / displayLine) لأنها
-// جميعًا عناصر Internet Archive بغض النظر عن المصدر المختار في الواجهة.
+// Uses the same Archive.org search structure used in source 3 (education
+// & teaching), but instead of a free-text search phrase, uses "collection:(id)" to
+// show the content of a specific collection the user entered manually (like
+// ukrainian-literature-school-curriculum or any other identifier from archive.org).
+// Results are always built via source 3's logic (buildBook / displayLine) since they
+// are all Internet Archive items regardless of the source selected in the UI.
 
 exports.handler = async (event) => {
   try {
     const q = event.queryStringParameters || {};
     const collectionId = (q.collection || "").trim();
     if (!collectionId) {
-      return { statusCode: 400, body: JSON.stringify({ error: "الرجاء إدخال معرّف المجموعة" }) };
+      return { statusCode: 400, body: JSON.stringify({ error: "Please enter a collection identifier" }) };
     }
 
     const query = `collection:(${collectionId})`;

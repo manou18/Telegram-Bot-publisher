@@ -4,11 +4,11 @@ const { checkPublished } = require("../lib/publishLog");
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: JSON.stringify({ error: "الطريقة غير مسموحة" }) };
+      return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
     const { source: sourceId, item } = JSON.parse(event.body || "{}");
     const source = SOURCES[sourceId];
-    if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "بيانات ناقصة" }) };
+    if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
 
     const book = await source.buildBook(item);
 
@@ -16,7 +16,7 @@ exports.handler = async (event) => {
     try {
       alreadyPublished = await checkPublished(event, book);
     } catch (e) {
-      console.error("تعذّر التحقق من سجل النشر:", e.message);
+      console.error("Failed to check the publish log:", e.message);
     }
     book.already_published = !!alreadyPublished;
     book.published_at = alreadyPublished ? alreadyPublished.publishedAt : null;

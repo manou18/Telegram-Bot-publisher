@@ -4,9 +4,9 @@ exports.handler = async (event) => {
   try {
     const q = event.queryStringParameters || {};
     const source = SOURCES[q.source];
-    if (!source) return { statusCode: 404, body: JSON.stringify({ error: "مصدر غير معروف" }) };
+    if (!source) return { statusCode: 404, body: JSON.stringify({ error: "Unknown source" }) };
     const topic = source.categories[q.category];
-    if (!topic) return { statusCode: 400, body: JSON.stringify({ error: "قسم غير معروف" }) };
+    if (!topic) return { statusCode: 400, body: JSON.stringify({ error: "Unknown category" }) };
 
     const data = await source.browseCategory(topic, q.next || null);
     const results = data.results.map((item) => ({ line: source.displayLine(item), item }));
