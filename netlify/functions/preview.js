@@ -1,5 +1,6 @@
 const { SOURCES } = require("../lib/sources");
 const { checkPublished } = require("../lib/publishLog");
+const { getRemoteFileSize } = require("../lib/fileSize");
 
 exports.handler = async (event) => {
   try {
@@ -11,6 +12,16 @@ exports.handler = async (event) => {
     if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
 
     const book = await source.buildBook(item);
+
+    // Look up sizes for whichever formats are available so the UI can show them before
+    // publishing. Done in parallel and best-effort — a host that won't answer stays null
+    // and the frontend just shows "size unknown" instead of failing the whole preview.
+    const [sizePdf, sizeEpub] = await Promise.all([
+      getRemoteFileSize(book.download_url_pdf),
+      getRemoteFileSize(book.download_url_epub),
+    ]);
+    book.file_size_pdf = sizePdf;
+    book.file_size_epub = sizeEpub;
 
     let alreadyPublished = null;
     try {
