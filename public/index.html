@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>فهرس الكتب — ناشر تيليجرام</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="drawer-rail">
+    <span>Gutenberg</span>
+    <span>Open Library</span>
+    <span>Internet Archive</span>
+  </div>
+
+  <main class="catalog">
+    <header class="catalog-head">
+      <h1>فهرس الكتب</h1>
+      <p class="subhead">تصفّح، اختر، وانشر على القناة — بلا سطر أوامر</p>
+    </header>
+
+    <section class="controls" id="controls">
+      <div class="field">
+        <label for="sourceSelect">المصدر</label>
+        <select id="sourceSelect"></select>
+      </div>
+
+      <div class="mode-tabs" role="tablist">
+        <button class="tab active" data-mode="browse" role="tab">تصفّح الأقسام</button>
+        <button class="tab" data-mode="search" role="tab">بحث بالاسم</button>
+      </div>
+
+      <div class="field" id="categoryField">
+        <label for="categorySelect">القسم</label>
+        <select id="categorySelect"></select>
+      </div>
+
+      <div class="field hidden" id="searchField">
+        <label for="searchInput">اسم الكتاب أو المؤلف</label>
+        <div class="search-row">
+          <input id="searchInput" type="text" placeholder="مثال: Jane Austen" />
+          <button id="searchBtn" class="btn-primary">بحث</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="results-wrap">
+      <p id="statusLine" class="status-line"></p>
+      <ol id="resultsList" class="card-index"></ol>
+      <button id="nextPageBtn" class="btn-ghost hidden">الصفحة التالية ↺</button>
+    </section>
+  </main>
+
+  <div id="previewOverlay" class="overlay hidden">
+    <div class="preview-card">
+      <button id="closePreview" class="close-x" aria-label="إغلاق">✕</button>
+      <div class="preview-body">
+        <div class="preview-cover">
+          <img id="previewCoverImg" alt="" />
+          <div id="previewCoverFallback" class="cover-fallback hidden">لا يوجد غلاف</div>
+        </div>
+        <div class="preview-info">
+          <p class="preview-source" id="previewSource"></p>
+          <h2 id="previewTitle"></h2>
+          <p id="previewAuthor" class="preview-author"></p>
+          <p id="previewFileState" class="preview-file-state"></p>
+          <div class="preview-actions">
+            <button id="publishBtn" class="btn-primary">نشر على القناة</button>
+            <button id="publishCoverOnlyBtn" class="btn-ghost hidden">نشر الغلاف فقط</button>
+          </div>
+          <p id="publishResult" class="publish-result"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
