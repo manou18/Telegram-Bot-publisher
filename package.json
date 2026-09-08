@@ -1,0 +1,12 @@
+{
+  "name": "telegram-book-bot",
+  "version": "1.0.0",
+  "description": "واجهة ويب على Netlify لنشر كتب من Project Gutenberg و Open Library على قناة تيليجرام",
+  "private": true,
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}
