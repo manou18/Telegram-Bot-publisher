@@ -54,6 +54,7 @@ const previewFileState = document.getElementById("previewFileState");
 const previewFileSize = document.getElementById("previewFileSize");
 const previewFileSizeWarning = document.getElementById("previewFileSizeWarning");
 const downloadLocalBtn = document.getElementById("downloadLocalBtn");
+const downloadLocalHint = document.getElementById("downloadLocalHint");
 const fileTypeChoice = document.getElementById("fileTypeChoice");
 const fileTypePdf = document.getElementById("fileTypePdf");
 const fileTypeEpub = document.getElementById("fileTypeEpub");
@@ -158,15 +159,27 @@ function updateFileSizeDisplay() {
     const url = selectedFileType ? downloadUrls[selectedFileType] : null;
     if (url) {
       downloadLocalBtn.href = url;
+      // The button previously just navigated to the archive.org file URL. For files this
+      // large (100MB+), Chrome tries to load/render it inline first and can sit on a
+      // blank tab for a long time before anything happens, which reads as "not working".
+      // The `download` attribute forces an immediate real download (progress shown in the
+      // browser's download notification/tray) instead of a page navigation attempt.
+      const ext = selectedFileType === "epub" ? "epub" : "pdf";
+      const safeTitle = (previewTitle.textContent || "book").trim().replace(/[\\/:*?"<>|]+/g, "").slice(0, 80) || "book";
+      downloadLocalBtn.setAttribute("download", `${safeTitle}.${ext}`);
       downloadLocalBtn.classList.remove("hidden");
+      downloadLocalHint.classList.remove("hidden");
     } else {
       downloadLocalBtn.classList.add("hidden");
+      downloadLocalBtn.removeAttribute("download");
+      downloadLocalHint.classList.add("hidden");
     }
   } else {
     previewFileSizeWarning.textContent = "";
     previewFileSizeWarning.classList.add("hidden");
     downloadLocalBtn.classList.add("hidden");
     downloadLocalBtn.removeAttribute("href");
+    downloadLocalHint.classList.add("hidden");
   }
 }
 

@@ -18,6 +18,9 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
+  overflow-x: hidden; /* belt-and-braces: nothing on this site should scroll sideways —
+    catches any future element that overflows its container instead of letting it drag
+    the whole page wider than the screen on mobile. */
 }
 
 body {
@@ -114,6 +117,7 @@ select:focus, input:focus, button:focus {
 
 .mode-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   margin-bottom: 18px;
   border-bottom: 1px solid var(--rule);
@@ -295,6 +299,7 @@ select:focus, input:focus, button:focus {
 }
 @media (max-width: 480px) {
   .preview-body { flex-direction: column; }
+  .tab { margin-inline-end: 10px; }
 }
 
 .preview-cover {
