@@ -4,6 +4,8 @@
 // as a file (multipart), which increases the function's execution time, so watch the timeout
 // limit in Netlify's settings when publishing large books (see the limits note in the README).
 
+const { buildCoverMockup } = require("./coverMockup");
+
 function getCreds() {
   const BOT_TOKEN = process.env.BOT_TOKEN;
   const CHANNEL_ID = process.env.CHANNEL_ID;
@@ -25,6 +27,22 @@ async function telegramPost(method, payload) {
   return data;
 }
 
+async function sendPhotoBuffer(chatId, buffer, caption) {
+  const { BOT_TOKEN } = getCreds();
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("caption", caption);
+  form.append("parse_mode", "HTML");
+  form.append("photo", new Blob([buffer], { type: "image/png" }), "cover.png");
+  const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await r.json();
+  if (!data.ok) throw new Error(data.description || "Failed to send the generated cover mockup");
+  return data;
+}
+
 function escapeHtml(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -33,6 +51,16 @@ function truncate(text, max) {
   if (!text) return "";
   const trimmed = text.trim();
   return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}…` : trimmed;
+}
+
+// Book covers are usually tall/portrait (~2:3), which makes Telegram's channel feed apply a
+// center-crop that cuts off the top and bottom of the image (title/author get chopped off).
+// The linked discussion group doesn't do this — it shows the photo uncropped. To make the
+// channel view match, we route the cover through a free image-proxy (wsrv.nl) that pads it
+// onto a square canvas with a white background instead of letting Telegram crop it.
+function paddedCoverUrl(coverUrl) {
+  const encoded = encodeURIComponent(coverUrl);
+  return `https://wsrv.nl/?url=${encoded}&w=1000&h=1000&fit=contain&bg=ffffff`;
 }
 
 async function sendCoverAndCaption(book) {
@@ -53,12 +81,18 @@ async function sendCoverAndCaption(book) {
   }
   const caption = `📚 <b>${escapeHtml(book.title)}</b>\n✍️ ${escapeHtml(book.author)}\n📖 ${escapeHtml(book.source)}${ratingPart}${descriptionPart}`;
   if (book.cover_url) {
-    await telegramPost("sendPhoto", {
-      chat_id: CHANNEL_ID,
-      photo: book.cover_url,
-      caption,
-      parse_mode: "HTML",
-    });
+    try {
+      const mockupBuffer = await buildCoverMockup(book.cover_url);
+      await sendPhotoBuffer(CHANNEL_ID, mockupBuffer, caption);
+    } catch (mockupError) {
+      console.warn(`Failed to build the 3D cover mockup (${mockupError.message}), falling back to the plain cover.`);
+      await telegramPost("sendPhoto", {
+        chat_id: CHANNEL_ID,
+        photo: paddedCoverUrl(book.cover_url),
+        caption,
+        parse_mode: "HTML",
+      });
+    }
   } else {
     await telegramPost("sendMessage", { chat_id: CHANNEL_ID, text: caption, parse_mode: "HTML" });
   }
