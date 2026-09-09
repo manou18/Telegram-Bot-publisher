@@ -9,6 +9,18 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="loginOverlay" class="overlay">
+    <div class="login-card">
+      <h2>🔒 Password Required</h2>
+      <p class="field-hint">This tool publishes directly to the Telegram channel — enter the site password to continue.</p>
+      <div class="search-row">
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        <button id="loginBtn" class="btn-primary">Enter</button>
+      </div>
+      <p id="loginError" class="preview-duplicate-warning hidden"></p>
+    </div>
+  </div>
+
   <div class="drawer-rail">
     <span>Gutenberg</span>
     <span>Open Library</span>
@@ -18,10 +30,19 @@
     <span>DOAB</span>
   </div>
 
-  <main class="catalog">
+  <main class="catalog hidden" id="mainCatalog">
     <header class="catalog-head">
-      <h1>Book Index</h1>
-      <p class="subhead">Browse, pick, and publish to the channel — no command line needed</p>
+      <div>
+        <h1>Book Index</h1>
+        <p class="subhead">Browse, pick, and publish to the channel — no command line needed</p>
+      </div>
+      <div class="header-actions">
+        <button id="statsBtn" class="btn-ghost">📊 Stats</button>
+        <button id="healthBtn" class="btn-ghost">🩺 Sources</button>
+        <button id="exportBtn" class="btn-ghost">⬇️ Export Backup</button>
+        <button id="importBtn" class="btn-ghost">⬆️ Import Backup</button>
+        <input type="file" id="importFileInput" accept="application/json,.json" class="hidden" />
+      </div>
     </header>
 
     <section class="controls" id="controls">
@@ -34,6 +55,8 @@
         <button class="tab active" data-mode="browse" role="tab">Browse Categories</button>
         <button class="tab" data-mode="search" role="tab">Search by Name</button>
         <button class="tab" data-mode="collection" role="tab">Archive.org Collection</button>
+        <button class="tab" data-mode="saved" role="tab">📌 Saved Books</button>
+        <button class="tab" data-mode="scheduled" role="tab">🕒 Scheduled</button>
       </div>
 
       <div class="field" id="categoryField">
@@ -64,7 +87,37 @@
     </section>
 
     <section class="results-wrap">
-      <p id="statusLine" class="status-line"></p>
+      <div class="results-toolbar">
+        <p id="statusLine" class="status-line"></p>
+        <div class="toolbar-filters">
+          <input
+            id="savedSearchInput"
+            type="text"
+            placeholder="🔍 Filter by title or author…"
+            class="hidden"
+          />
+          <label class="rating-filter-label">
+            Show:
+            <select id="ratingFilterSelect">
+              <option value="all">All results</option>
+              <option value="rated">⭐ Rated only</option>
+              <option value="top">⭐ 4+ only</option>
+              <option value="unrated">Unrated only</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="bulkPublishBar" class="bulk-bar hidden">
+        <label class="bulk-select-all">
+          <input type="checkbox" id="bulkSelectAll" />
+          Select all
+        </label>
+        <span id="bulkSelectedCount" class="bulk-count">0 selected</span>
+        <button id="bulkPublishBtn" class="btn-primary" disabled>📮 Publish Selected</button>
+        <input type="datetime-local" id="bulkScheduleDateTime" />
+        <button id="bulkScheduleBtn" class="btn-ghost" disabled>🕒 Schedule Selected</button>
+      </div>
+      <p id="bulkPublishStatus" class="bulk-status hidden"></p>
       <ol id="resultsList" class="card-index"></ol>
       <button id="nextPageBtn" class="btn-ghost hidden">Next page ↺</button>
     </section>
@@ -87,6 +140,8 @@
           <p id="previewDescription" class="preview-description hidden"></p>
           <p id="previewFileState" class="preview-file-state"></p>
           <p id="previewFileSize" class="preview-file-size hidden"></p>
+          <p id="previewFileSizeWarning" class="preview-size-warning hidden"></p>
+          <a id="downloadLocalBtn" class="btn-ghost download-local-btn hidden" target="_blank" rel="noopener">⬇️ Download File Locally</a>
           <div id="fileTypeChoice" class="file-type-choice hidden">
             <span class="file-type-label">Choose publish format:</span>
             <label class="file-type-option">
@@ -98,14 +153,45 @@
               EPUB
             </label>
           </div>
+          <p id="previewSourceRating" class="preview-source-rating hidden"></p>
           <p id="previewDuplicateWarning" class="preview-duplicate-warning hidden"></p>
+          <p id="previewSavedNote" class="preview-saved-note hidden"></p>
+          <p id="previewScheduledNote" class="preview-saved-note hidden"></p>
           <div class="preview-actions">
+            <button id="saveBtn" class="btn-ghost">💾 Save for Later</button>
             <button id="publishBtn" class="btn-primary">Publish to Channel</button>
             <button id="publishCoverOnlyBtn" class="btn-ghost hidden">Publish Cover Only</button>
+          </div>
+          <div id="scheduleField" class="schedule-field">
+            <label for="scheduleDateTime">🕒 Or schedule for later:</label>
+            <div class="search-row">
+              <input type="datetime-local" id="scheduleDateTime" />
+              <button id="scheduleBtn" class="btn-ghost">Schedule</button>
+            </div>
           </div>
           <p id="publishResult" class="publish-result"></p>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="statsOverlay" class="overlay hidden">
+    <div class="stats-card">
+      <div class="preview-card-header">
+        <h2>📊 Publishing Stats</h2>
+        <button id="closeStats" class="close-x" aria-label="Close">✕</button>
+      </div>
+      <div id="statsContent" class="stats-content"></div>
+    </div>
+  </div>
+
+  <div id="healthOverlay" class="overlay hidden">
+    <div class="stats-card">
+      <div class="preview-card-header">
+        <h2>🩺 Sources Status</h2>
+        <button id="closeHealth" class="close-x" aria-label="Close">✕</button>
+      </div>
+      <div id="healthContent" class="stats-content"></div>
     </div>
   </div>
 
