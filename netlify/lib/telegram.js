@@ -43,7 +43,15 @@ async function sendCoverAndCaption(book) {
   const descriptionPart = book.description
     ? `\n\n📝 ${escapeHtml(truncate(book.description, maxDescLen))}`
     : "";
-  const caption = `📚 <b>${book.title}</b>\n✍️ ${book.author}\n📖 ${book.source}${descriptionPart}`;
+  // book.rating now comes straight from the source's real reader rating (Open Library /
+  // Google Books) when one exists, so it can be a decimal like 4.3 rather than a whole
+  // number — round for the star count, but keep the decimal in the printed "x/5".
+  let ratingPart = "";
+  if (typeof book.rating === "number" && book.rating > 0) {
+    const display = Number.isInteger(book.rating) ? String(book.rating) : book.rating.toFixed(1);
+    ratingPart = `\n${"⭐".repeat(Math.round(book.rating))} (${display}/5 — reader rating)`;
+  }
+  const caption = `📚 <b>${escapeHtml(book.title)}</b>\n✍️ ${escapeHtml(book.author)}\n📖 ${escapeHtml(book.source)}${ratingPart}${descriptionPart}`;
   if (book.cover_url) {
     await telegramPost("sendPhoto", {
       chat_id: CHANNEL_ID,

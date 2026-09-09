@@ -11,6 +11,8 @@
 // fails sometimes for the exact same request) — and gives a clear error message on
 // final failure instead of passing along the raw JSON.parse error.
 
+const { cachedFetchJson } = require("./httpCache");
+
 const RETRYABLE_STATUS = new Set([403, 408, 429, 500, 502, 503, 504]);
 
 function sleep(ms) {
@@ -73,15 +75,15 @@ const GUTENBERG_CATEGORIES = {
   20: "sports",
 };
 
-async function gutenbergBrowseCategory(topic, pageUrl) {
+async function gutenbergBrowseCategory(event, topic, pageUrl) {
   const finalUrl = pageUrl || `https://gutendex.com/books?topic=${encodeURIComponent(topic)}`;
-  const data = await fetchJson(finalUrl);
+  const data = await cachedFetchJson(event, finalUrl, fetchJson);
   return { results: data.results || [], next: data.next || null };
 }
 
-async function gutenbergSearch(query, pageUrl) {
+async function gutenbergSearch(event, query, pageUrl) {
   const finalUrl = pageUrl || `https://gutendex.com/books?search=${encodeURIComponent(query)}`;
-  const data = await fetchJson(finalUrl);
+  const data = await cachedFetchJson(event, finalUrl, fetchJson);
   return { results: data.results || [], next: data.next || null };
 }
 
@@ -120,22 +122,27 @@ const OPENLIBRARY_CATEGORIES = {
   8: "poetry",
   9: "children",
   10: "biography",
+  11: "education",
 };
 
-async function openlibraryBrowseCategory(subject, offsetToken) {
+async function openlibraryBrowseCategory(event, subject, offsetToken) {
   const offset = offsetToken ? parseInt(offsetToken, 10) : 0;
   const url = `https://openlibrary.org/subjects/${subject}.json?limit=10&offset=${offset}`;
-  const data = await fetchJson(url);
+  const data = await cachedFetchJson(event, url, fetchJson);
   const works = data.works || [];
   const total = data.work_count || 0;
   const nextOffset = offset + 10 < total ? offset + 10 : null;
   return { results: works, next: nextOffset !== null ? String(nextOffset) : null };
 }
 
-async function openlibrarySearch(query, pageToken) {
+async function openlibrarySearch(event, query, pageToken) {
   const page = pageToken ? parseInt(pageToken, 10) : 1;
-  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=10&page=${page}`;
-  const data = await fetchJson(url);
+  // fields=*,ratings_average,ratings_count — the default field set doesn't include reader
+  // ratings, so they have to be requested explicitly to know when a real rating exists.
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
+    query
+  )}&limit=10&page=${page}&fields=*,ratings_average,ratings_count`;
+  const data = await cachedFetchJson(event, url, fetchJson);
   const docs = data.docs || [];
   const total = data.numFound || 0;
   const nextPage = page * 10 < total ? page + 1 : null;
@@ -199,6 +206,23 @@ async function openlibraryFetchDescription(doc) {
   }
 }
 
+// Shared with openlibrarySourceRating() below — pulls the real reader rating out of a
+// raw Open Library doc when one exists, so both the full book detail and the lightweight
+// browse/search list rows use the exact same rule for what counts as "rated".
+function openlibraryExtractRating(doc) {
+  const count = typeof doc.ratings_count === "number" ? doc.ratings_count : null;
+  const average = typeof doc.ratings_average === "number" ? doc.ratings_average : null;
+  return { rating: count ? average : null, count };
+}
+
+// Cheap, synchronous — reads straight off the search.json doc (already fetched for the
+// list), no extra request. Used to sort/display reader ratings in Browse/Search results
+// before a book is even opened. Only openlibrarySearch requests the ratings_average/
+// ratings_count fields, so subject-browse rows have nothing to show here (see openlibraryBrowseCategory).
+function openlibrarySourceRating(doc) {
+  return openlibraryExtractRating(doc).rating;
+}
+
 async function openlibraryBuildBook(doc) {
   const title = doc.title;
   let author;
@@ -228,6 +252,12 @@ async function openlibraryBuildBook(doc) {
     description = await openlibraryFetchDescription(doc);
   }
 
+  // A real reader rating from Open Library — only present when readers have actually rated
+  // the book there (e.g. via search.json's ratings_average/ratings_count fields, requested
+  // explicitly above). Browsing by subject doesn't expose these fields at all, so books
+  // reached that way simply won't have a source_rating, same as if OL had none for them.
+  const { rating: sourceRating, count: sourceRatingCount } = openlibraryExtractRating(doc);
+
   return {
     title,
     author,
@@ -237,6 +267,8 @@ async function openlibraryBuildBook(doc) {
     download_url_epub: downloadUrlEpub,
     description,
     source: "Open Library / Internet Archive",
+    source_rating: sourceRating,
+    source_rating_count: sourceRatingCount,
   };
 }
 
@@ -259,9 +291,10 @@ const ARCHIVE_EDU_CATEGORIES = {
   4: "english grammar",
   5: "TEFL TESL teaching english foreign language",
   6: "curriculum instruction teaching methods",
+  7: "education",
 };
 
-async function archiveEduAdvancedSearch(query, pageToken) {
+async function archiveEduAdvancedSearch(event, query, pageToken) {
   const page = pageToken ? parseInt(pageToken, 10) : 1;
   const params = new URLSearchParams();
   params.append("q", `(${query}) AND mediatype:(texts)`);
@@ -273,19 +306,20 @@ async function archiveEduAdvancedSearch(query, pageToken) {
   params.append("page", String(page));
   params.append("output", "json");
 
-  const data = await fetchJson(`https://archive.org/advancedsearch.php?${params.toString()}`);
+  const url = `https://archive.org/advancedsearch.php?${params.toString()}`;
+  const data = await cachedFetchJson(event, url, fetchJson);
   const docs = (data.response && data.response.docs) || [];
   const total = (data.response && data.response.numFound) || 0;
   const nextPage = page * 10 < total ? page + 1 : null;
   return { results: docs, next: nextPage !== null ? String(nextPage) : null };
 }
 
-async function archiveEduBrowseCategory(topic, pageToken) {
-  return archiveEduAdvancedSearch(topic, pageToken);
+async function archiveEduBrowseCategory(event, topic, pageToken) {
+  return archiveEduAdvancedSearch(event, topic, pageToken);
 }
 
-async function archiveEduSearch(query, pageToken) {
-  return archiveEduAdvancedSearch(query, pageToken);
+async function archiveEduSearch(event, query, pageToken) {
+  return archiveEduAdvancedSearch(event, query, pageToken);
 }
 
 function archiveEduAuthors(doc) {
@@ -351,24 +385,24 @@ function oapenMetaValues(metadata, key) {
   return (metadata || []).filter((entry) => entry.key === key).map((entry) => entry.value);
 }
 
-async function oapenSearchRaw(queryString, pageToken) {
+async function oapenSearchRaw(event, queryString, pageToken) {
   const limit = 10;
   const offset = pageToken ? parseInt(pageToken, 10) : 0;
   const url = `${OAPEN_BASE}/rest/search?query=${encodeURIComponent(
     queryString
   )}&expand=metadata,bitstreams&limit=${limit}&offset=${offset}`;
-  const data = await fetchJson(url);
+  const data = await cachedFetchJson(event, url, fetchJson);
   const results = Array.isArray(data) ? data : [];
   const next = results.length === limit ? String(offset + limit) : null;
   return { results, next };
 }
 
-async function oapenBrowseCategory(publisherName, pageToken) {
-  return oapenSearchRaw(`publisher.name:"${publisherName}"`, pageToken);
+async function oapenBrowseCategory(event, publisherName, pageToken) {
+  return oapenSearchRaw(event, `publisher.name:"${publisherName}"`, pageToken);
 }
 
-async function oapenSearch(query, pageToken) {
-  return oapenSearchRaw(query, pageToken);
+async function oapenSearch(event, query, pageToken) {
+  return oapenSearchRaw(event, query, pageToken);
 }
 
 function oapenAuthors(item) {
@@ -428,12 +462,12 @@ const GOOGLE_BOOKS_CATEGORIES = {
   10: "science",
 };
 
-async function googleBooksSearch(query, pageToken) {
+async function googleBooksSearch(event, query, pageToken) {
   const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
   const url =
     `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}` +
     `&filter=full&maxResults=10&startIndex=${startIndex}`;
-  const data = await fetchJson(url);
+  const data = await cachedFetchJson(event, url, fetchJson);
   const results = data.items || [];
   const total = data.totalItems || 0;
   const next = startIndex + results.length < total && results.length
@@ -442,14 +476,28 @@ async function googleBooksSearch(query, pageToken) {
   return { results, next };
 }
 
-async function googleBooksBrowseCategory(topic, pageToken) {
-  return googleBooksSearch(`subject:${topic}`, pageToken);
+async function googleBooksBrowseCategory(event, topic, pageToken) {
+  return googleBooksSearch(event, `subject:${topic}`, pageToken);
 }
 
 function googleBooksDisplayLine(item) {
   const info = item.volumeInfo || {};
   const authors = (info.authors || []).join(", ") || "Unknown";
   return `${info.title || "Untitled"}  —  ${authors}`;
+}
+
+// Shared with googleBooksSourceRating() below — same reasoning as Open Library's helper.
+function googleBooksExtractRating(info) {
+  const count = typeof info.ratingsCount === "number" ? info.ratingsCount : null;
+  const average = typeof info.averageRating === "number" ? info.averageRating : null;
+  return { rating: count ? average : null, count };
+}
+
+// Cheap, synchronous — reads straight off the volume item already returned by the list
+// endpoint (search or category browse both include volumeInfo.averageRating/ratingsCount
+// by default), no extra request needed.
+function googleBooksSourceRating(item) {
+  return googleBooksExtractRating(item.volumeInfo || {}).rating;
 }
 
 async function googleBooksBuildBook(item) {
@@ -466,6 +514,10 @@ async function googleBooksBuildBook(item) {
     ? access.epub.downloadLink
     : null;
 
+  // A real reader rating from Google Books — averageRating (1-5) is only present when
+  // ratingsCount is greater than zero; volumes with no reader ratings omit both fields.
+  const { rating: sourceRating, count: sourceRatingCount } = googleBooksExtractRating(info);
+
   return {
     title: info.title || "Untitled",
     author: (info.authors || []).join(", ") || "Unknown",
@@ -476,6 +528,8 @@ async function googleBooksBuildBook(item) {
     description: info.description || null,
     source: "Google Books — Public Domain",
     source_url: info.infoLink || info.previewLink || null,
+    source_rating: sourceRating,
+    source_rating_count: sourceRatingCount,
   };
 }
 
@@ -505,24 +559,24 @@ function doabMetaValues(metadata, key) {
   return (metadata || []).filter((entry) => entry.key === key).map((entry) => entry.value);
 }
 
-async function doabSearchRaw(queryString, pageToken) {
+async function doabSearchRaw(event, queryString, pageToken) {
   const limit = 10;
   const offset = pageToken ? parseInt(pageToken, 10) : 0;
   const url =
     `${DOAB_BASE}/rest/search?query=${encodeURIComponent(queryString)}` +
     `&expand=metadata,bitstreams&limit=${limit}&offset=${offset}`;
-  const data = await fetchJson(url);
+  const data = await cachedFetchJson(event, url, fetchJson);
   const results = Array.isArray(data) ? data : [];
   const next = results.length === limit ? String(offset + limit) : null;
   return { results, next };
 }
 
-async function doabSearch(query, pageToken) {
-  return doabSearchRaw(query, pageToken);
+async function doabSearch(event, query, pageToken) {
+  return doabSearchRaw(event, query, pageToken);
 }
 
-async function doabBrowseCategory(topic, pageToken) {
-  return doabSearchRaw(`"${topic}"`, pageToken);
+async function doabBrowseCategory(event, topic, pageToken) {
+  return doabSearchRaw(event, `"${topic}"`, pageToken);
 }
 
 function doabAuthors(item) {
@@ -590,6 +644,7 @@ const SOURCES = {
     search: openlibrarySearch,
     displayLine: openlibraryDisplayLine,
     buildBook: openlibraryBuildBook,
+    sourceRating: openlibrarySourceRating,
   },
   3: {
     name: "Internet Archive — Education, Teaching & Psychology",
@@ -614,6 +669,7 @@ const SOURCES = {
     search: googleBooksSearch,
     displayLine: googleBooksDisplayLine,
     buildBook: googleBooksBuildBook,
+    sourceRating: googleBooksSourceRating,
   },
   6: {
     name: "DOAB — Open Access Books",
