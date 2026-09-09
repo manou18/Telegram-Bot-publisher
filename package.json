@@ -7,7 +7,8 @@
     "dev": "netlify dev"
   },
   "dependencies": {
-    "@netlify/blobs": "latest"
+    "@netlify/blobs": "latest",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "netlify-cli": "^17.0.0"
