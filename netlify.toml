@@ -9,3 +9,8 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+# Runs every 5 minutes and publishes any "scheduled for later" book whose time has come.
+# Not called by the frontend — Netlify's own scheduler triggers this on its own.
+[functions."scheduled-publish"]
+  schedule = "*/5 * * * *"
