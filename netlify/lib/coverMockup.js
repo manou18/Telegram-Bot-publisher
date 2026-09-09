@@ -50,13 +50,24 @@ async function buildCoverMockup(coverUrl) {
   const shearedWidth = shearedMeta.width;
   const shearedHeight = shearedMeta.height;
 
-  const PADDING = 60;
-  const canvasWidth = shearedWidth + PADDING * 2;
-  const canvasHeight = shearedHeight + PADDING * 2;
+  // Telegram's channel feed center-crops tall/portrait photos (see the comment on
+  // paddedCoverUrl in telegram.js) — the safe fix used elsewhere in this app is to
+  // pad the image onto a square (1:1) canvas instead of a tall rectangle. We do the
+  // same here: pick a small margin, then size the canvas to a square based on the
+  // sheared cover's larger dimension, and center the cover inside it. For a portrait
+  // cover this naturally adds extra whitespace on the sides (not just top/bottom),
+  // which both avoids the crop and gives the smaller, more "framed" look.
+  const MARGIN = Math.round(COVER_HEIGHT * 0.08);
+  const squareSize = Math.max(shearedWidth, shearedHeight) + MARGIN * 2;
+  const canvasWidth = squareSize;
+  const canvasHeight = squareSize;
+  const left = Math.round((canvasWidth - shearedWidth) / 2);
+  const top = Math.round((canvasHeight - shearedHeight) / 2);
+  const bottomOfImage = top + shearedHeight;
 
   // Soft blurred shadow sitting just under where the cover lands on the canvas.
   const shadowSvg = `<svg width="${canvasWidth}" height="${canvasHeight}" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="${canvasWidth / 2}" cy="${canvasHeight - PADDING * 0.6}" rx="${shearedWidth / 2.1}" ry="16" fill="black" opacity="0.35" />
+    <ellipse cx="${canvasWidth / 2}" cy="${bottomOfImage + MARGIN * 0.4}" rx="${shearedWidth / 2.1}" ry="16" fill="black" opacity="0.35" />
   </svg>`;
   const shadow = await sharp(Buffer.from(shadowSvg)).blur(14).png().toBuffer();
 
@@ -70,7 +81,7 @@ async function buildCoverMockup(coverUrl) {
   })
     .composite([
       { input: shadow, left: 0, top: 0 },
-      { input: sheared, left: PADDING, top: PADDING },
+      { input: sheared, left, top },
     ])
     .png()
     .toBuffer();
