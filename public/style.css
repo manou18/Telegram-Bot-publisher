@@ -30,10 +30,8 @@ body {
   display: flex;
   background-image:
     radial-gradient(circle at 15% 0%, rgba(111, 147, 240, 0.08), transparent 55%),
-    radial-gradient(circle at 100% 30%, rgba(217, 164, 65, 0.06), transparent 45%),
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: auto, auto, 100% 42px;
-  background-attachment: fixed, fixed, local;
+    radial-gradient(circle at 100% 30%, rgba(217, 164, 65, 0.06), transparent 45%);
+  background-attachment: fixed, fixed;
 }
 
 /* Left rail styled like library card-catalog drawer labels */
@@ -74,6 +72,7 @@ body {
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: 24px;
 }
 .catalog-head h1 {
   font-family: var(--font-display);
@@ -542,6 +541,7 @@ select:focus, input:focus, button:focus {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 
 /* File-size warning (Telegram's 50MB bot upload limit) */
