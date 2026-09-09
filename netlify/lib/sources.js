@@ -160,16 +160,30 @@ function openlibraryDisplayLine(doc) {
 // the item has both PDF and EPUB and can give the user the choice between them.
 // It also extracts the book description from the same archive.org/metadata response (metadata.description)
 // without needing an extra request. Returns { files: { ".pdf": url, ".epub": url }, description }.
+// Books that are "borrow only" (lending library) on archive.org don't expose the real
+// scan for direct download — instead the files list contains a tiny encrypted/placeholder
+// stub (often just a few KB) that still ends in .pdf or .epub. We skip those entirely, and
+// as a second safety net skip any matching file whose own reported size is implausibly
+// small for an actual book, using the size archive.org already gives us per file (no extra
+// request needed).
+const MIN_PLAUSIBLE_BOOK_BYTES = 100 * 1024; // 100 KB
+
 async function fetchArchiveInfo(iaId, extensions) {
   const data = await fetchJson(`https://archive.org/metadata/${iaId}`);
   const found = {};
   extensions.forEach((ext) => (found[ext] = null));
-  for (const f of data.files || []) {
-    const name = f.name || "";
-    const lower = name.toLowerCase();
-    for (const ext of extensions) {
-      if (!found[ext] && lower.endsWith(ext)) {
-        found[ext] = `https://archive.org/download/${iaId}/${name}`;
+
+  const isRestricted = String((data.metadata || {})["access-restricted-item"]).toLowerCase() === "true";
+  if (!isRestricted) {
+    for (const f of data.files || []) {
+      const name = f.name || "";
+      const lower = name.toLowerCase();
+      const size = Number(f.size);
+      for (const ext of extensions) {
+        if (!found[ext] && lower.endsWith(ext)) {
+          if (Number.isFinite(size) && size > 0 && size < MIN_PLAUSIBLE_BOOK_BYTES) continue; // skip DRM/placeholder stub
+          found[ext] = `https://archive.org/download/${iaId}/${name}`;
+        }
       }
     }
   }
