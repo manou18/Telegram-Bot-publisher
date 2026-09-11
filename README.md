@@ -32,10 +32,17 @@ telegram-book-bot/
     │   ├── scheduled.js       ← list scheduled books (pending + history)
     │   ├── scheduled-cancel.js← cancel a pending schedule / clear a resolved one
     │   ├── scheduled-publish.js ← cron job (not called by the frontend) that publishes due books
-    │   └── collection.js     ← browse any Archive.org collection by manually entering its identifier
+    │   ├── collection.js     ← browse any Archive.org collection by manually entering its identifier
+    │   ├── publish-manual.js ← publish a manually-entered book (Add Manually tab)
+    │   ├── copyright-check.js← best-effort public-domain advisory check for manual entries
+    │   └── extract-book-info.js ← AI (Gemini) title/author/description extraction for manual entries
     └── lib/                   ← shared logic (book sources + sending to Telegram)
         ├── sources.js
         ├── telegram.js
+        ├── bookIdentity.js    ← stable per-source dedupe key used by publishLog/savedBooks
+        ├── copyrightCheck.js  ← logic behind the public-domain advisory check
+        ├── geminiExtract.js   ← calls the Gemini API for the AI extraction feature
+        ├── epubMeta.js        ← minimal EPUB (ZIP) metadata/text reader used by geminiExtract.js
         ├── publishLog.js      ← records previously published books (via Netlify Blobs)
         ├── savedBooks.js      ← records bookmarked ("save for later") books (via Netlify Blobs)
         └── scheduledBooks.js  ← records "publish later" schedules (via Netlify Blobs)
@@ -75,6 +82,7 @@ From **Site settings → Environment variables → Add a variable** add:
 | `BOT_TOKEN` | the bot token from BotFather |
 | `CHANNEL_ID` | e.g. `@channel_username` |
 | `SITE_PASSWORD` | a password you choose — required to use the site at all (see below) |
+| `GEMINI_API_KEY` | optional — a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey), only needed for the "Add Manually" tab's ✨ Extract with AI button |
 
 After saving, redeploy the site (Deploys → Trigger deploy) so the functions pick up the
 new variables.
@@ -133,6 +141,37 @@ password screen before loading anything; once entered correctly it's remembered 
 browser (`localStorage`) so you're not asked again on that device. This is a simple
 shared-secret check rather than real user accounts — good enough for a single admin/small
 team, not meant to replace proper authentication for a multi-user setup.
+
+## Extracting title/author/description with AI (Add Manually tab)
+
+On the **➕ Add Manually** tab, once you've attached a cover image and/or a book file
+(PDF/EPUB, uploaded or pasted as a URL), the **✨ Extract Title/Author/Description with AI**
+button sends what you've attached to Google's Gemini API and fills in the Title, Author, and
+Description fields for you:
+
+- **PDF files** are sent to Gemini natively (it reads the document directly — cover page,
+  title page, back-cover text, etc.).
+- **EPUB files** aren't a format Gemini reads directly, so `netlify/lib/epubMeta.js` first
+  unzips the EPUB locally (it's just a ZIP archive) and pulls out its own `<dc:title>` /
+  `<dc:creator>` / `<dc:description>` metadata plus a plain-text sample of the opening
+  chapters, and that's what gets sent to Gemini instead.
+- The **cover image**, if attached, is sent as well (useful on its own if there's no book
+  file yet, or as extra context alongside the file).
+
+The description is asked for in the book's own language and capped to whatever will
+actually fit in the Telegram post: 500 characters if a cover photo will be sent (Telegram's
+photo-caption limit is 1024 characters total, and the rest of the caption needs room for the
+title/author/source lines too) or 1500 characters if it's a text-only post — the same
+`maxDescLen` logic `netlify/lib/telegram.js` uses when actually publishing. Whatever Gemini
+returns is also hard-truncated server-side afterwards, so an overly long response still can't
+break the actual publish step.
+
+This is entirely optional and only pre-fills the form — nothing is auto-published, and you
+should always read over the suggested title/author/description before hitting **Publish**.
+Requires the `GEMINI_API_KEY` environment variable (see above); without it, every other part
+of the app works as normal, just not this button. Very large PDFs (roughly over 15 MB) are
+skipped automatically to stay under Gemini's request-size limit — you'll still get a result
+from whichever of the cover/file it *could* read, with a note about what was skipped.
 
 ## Preventing duplicate publishing of the same book
 
