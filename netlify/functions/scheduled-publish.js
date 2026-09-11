@@ -29,6 +29,11 @@ exports.handler = async (event) => {
         const book = await source.buildBook(record.item);
         book.rating = record.rating;
         book.category = record.category || null;
+        // Carry forward any description the user edited/rewrote with AI at schedule time,
+        // instead of publishing the raw source description that buildBook() just fetched.
+        if (typeof record.description === "string") {
+          book.description = record.description.trim() || null;
+        }
 
         if (record.fileType === "pdf" && book.download_url_pdf) {
           book.download_url = book.download_url_pdf;

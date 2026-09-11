@@ -10,7 +10,7 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
-    const { source: sourceId, item, rating, category } = JSON.parse(event.body || "{}");
+    const { source: sourceId, item, rating, category, customDescription } = JSON.parse(event.body || "{}");
     const source = SOURCES[sourceId];
     if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
 
@@ -25,7 +25,7 @@ exports.handler = async (event) => {
     }
 
     const book = await source.buildBook(item);
-    const record = await saveBook(event, sourceId, item, book, ratingNum, category);
+    const record = await saveBook(event, sourceId, item, book, ratingNum, category, customDescription);
 
     return { statusCode: 200, body: JSON.stringify({ status: "saved", record }) };
   } catch (e) {

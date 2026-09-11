@@ -12,11 +12,23 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
-    const { source: sourceId, item, publishCoverOnlyIfNoFile, force, fileType, category } = JSON.parse(event.body || "{}");
+    const { source: sourceId, item, publishCoverOnlyIfNoFile, force, fileType, category, customCoverUrl, customDescription } =
+      JSON.parse(event.body || "{}");
     const source = SOURCES[sourceId];
     if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
 
     const book = await source.buildBook(item);
+    // Manually supplied cover (uploaded file as a data: URI, or a pasted image URL) takes
+    // priority over whatever the source fetched, when the user picked "Custom cover" in the UI.
+    if (customCoverUrl) {
+      book.cover_url = customCoverUrl;
+    }
+    // User-edited or AI-rewritten description from the preview screen takes priority over
+    // whatever the source's raw metadata had — this is exactly the fix for long/inaccurate
+    // source descriptions getting blindly chopped by telegram.js's truncate().
+    if (typeof customDescription === "string") {
+      book.description = customDescription.trim() || null;
+    }
     // No manual rating step: when the source itself provides a real reader rating (Open
     // Library / Google Books, when readers have actually rated that book there), use it.
     // Every other source — and books on OL/Google Books with no reader ratings — publish

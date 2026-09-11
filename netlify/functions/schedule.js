@@ -10,7 +10,7 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
-    const { source: sourceId, item, fileType, publishCoverOnlyIfNoFile, category, scheduledFor } =
+    const { source: sourceId, item, fileType, publishCoverOnlyIfNoFile, category, scheduledFor, customDescription } =
       JSON.parse(event.body || "{}");
     const source = SOURCES[sourceId];
     if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
@@ -43,6 +43,7 @@ exports.handler = async (event) => {
       fileType: fileType || null,
       publishCoverOnlyIfNoFile: !!publishCoverOnlyIfNoFile,
       scheduledFor: target.toISOString(),
+      description: customDescription,
     });
 
     return { statusCode: 200, body: JSON.stringify({ status: "scheduled", record }) };
