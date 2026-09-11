@@ -57,6 +57,7 @@
         <button class="tab" data-mode="collection" role="tab">Archive.org Collection</button>
         <button class="tab" data-mode="saved" role="tab">📌 Saved Books</button>
         <button class="tab" data-mode="scheduled" role="tab">🕒 Scheduled</button>
+        <button class="tab" data-mode="manual" role="tab">➕ Add Manually</button>
       </div>
 
       <div class="field" id="categoryField">
@@ -86,7 +87,79 @@
       </div>
     </section>
 
-    <section class="results-wrap">
+    <section class="controls hidden" id="manualField">
+      <div class="field">
+        <label for="manualTitleInput">Title *</label>
+        <input id="manualTitleInput" type="text" placeholder="Book title" />
+      </div>
+      <div class="field">
+        <label for="manualAuthorInput">Author</label>
+        <input id="manualAuthorInput" type="text" placeholder="Author name" />
+      </div>
+      <div class="field">
+        <label for="manualDescriptionInput">Description</label>
+        <textarea id="manualDescriptionInput" rows="4" placeholder="A short description of the book…"></textarea>
+      </div>
+
+      <div class="copyright-check-field">
+        <button id="checkCopyrightBtn" class="btn-ghost" type="button">🔍 Check Copyright Status</button>
+        <div id="copyrightResult" class="copyright-result hidden"></div>
+      </div>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Cover</span>
+        <div class="cover-upload-row">
+          <label for="manualCoverFile" class="btn-ghost cover-upload-btn">⬆️ Upload Cover Image</label>
+          <input type="file" id="manualCoverFile" accept="image/*" class="hidden-file-input" />
+          <img id="manualCoverPreview" class="custom-cover-thumb hidden" alt="Cover preview" />
+          <button id="manualRemoveCoverBtn" class="btn-ghost hidden" type="button">✕ Remove</button>
+        </div>
+        <div class="search-row cover-url-row">
+          <input type="url" id="manualCoverUrlInput" placeholder="…or paste an image URL" />
+          <button id="manualUseCoverUrlBtn" class="btn-ghost" type="button">Use URL</button>
+        </div>
+      </div>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">📄 Book file (PDF or EPUB)</span>
+        <div class="cover-upload-row">
+          <label for="manualBookFile" class="btn-ghost cover-upload-btn">⬆️ Upload File</label>
+          <input type="file" id="manualBookFile" accept=".pdf,.epub,application/pdf,application/epub+zip" class="hidden-file-input" />
+          <span id="manualBookFileName" class="field-hint hidden"></span>
+          <button id="manualRemoveFileBtn" class="btn-ghost hidden" type="button">✕ Remove</button>
+        </div>
+        <p class="field-hint">Uploads are limited to a few MB (serverless request-size limit). For a bigger PDF/EPUB, paste a direct file link instead — e.g. a Google Drive/Dropbox direct-download link, a GitHub raw link, or your own hosting.</p>
+        <div class="search-row cover-url-row">
+          <input type="url" id="manualFileUrlInput" placeholder="…or paste a direct file URL" />
+          <button id="manualUseFileUrlBtn" class="btn-ghost" type="button">Use URL</button>
+        </div>
+        <div id="manualFileTypeChoice" class="file-type-choice hidden">
+          <span class="file-type-label">File format:</span>
+          <label class="file-type-option">
+            <input type="radio" name="manualFileType" id="manualFileTypePdf" value="pdf" checked />
+            PDF
+          </label>
+          <label class="file-type-option">
+            <input type="radio" name="manualFileType" id="manualFileTypeEpub" value="epub" />
+            EPUB
+          </label>
+        </div>
+      </div>
+
+      <div class="copyright-check-field">
+        <button id="extractInfoBtn" class="btn-ghost" type="button">✨ Extract Title/Author/Description with AI</button>
+        <p class="field-hint">Reads the cover image and/or the book file (PDF natively, EPUB via its metadata/text) with Gemini and fills in the fields above. Always review before publishing.</p>
+        <div id="extractInfoResult" class="copyright-result hidden"></div>
+      </div>
+
+      <div class="preview-actions">
+        <button id="manualPublishBtn" class="btn-primary">Publish to Channel</button>
+        <button id="manualPublishCoverOnlyBtn" class="btn-ghost hidden">Publish Cover Only</button>
+      </div>
+      <p id="manualPublishResult" class="publish-result"></p>
+    </section>
+
+    <section class="results-wrap" id="resultsWrap">
       <div class="results-toolbar">
         <p id="statusLine" class="status-line"></p>
         <div class="toolbar-filters">
@@ -137,7 +210,14 @@
           <p class="preview-source" id="previewSource"></p>
           <h2 id="previewTitle"></h2>
           <p id="previewAuthor" class="preview-author"></p>
-          <p id="previewDescription" class="preview-description hidden"></p>
+          <div class="preview-description-field">
+            <textarea id="previewDescriptionInput" class="preview-description-input" rows="4" placeholder="No description available — try Rewrite with AI, or type your own."></textarea>
+            <div class="preview-description-actions">
+              <button id="rewriteDescriptionBtn" class="btn-ghost" type="button">🪄 Rewrite with AI</button>
+              <span id="previewDescriptionNote" class="preview-description-note hidden"></span>
+            </div>
+            <div id="previewDescriptionResult" class="copyright-result hidden"></div>
+          </div>
           <p id="previewFileState" class="preview-file-state"></p>
           <p id="previewFileSize" class="preview-file-size hidden"></p>
           <p id="previewFileSizeWarning" class="preview-size-warning hidden"></p>
@@ -153,6 +233,29 @@
               <input type="radio" name="fileType" id="fileTypeEpub" value="epub" />
               EPUB
             </label>
+          </div>
+          <div id="coverChoiceField" class="cover-choice-field">
+            <span class="file-type-label">🖼️ Cover to publish:</span>
+            <div id="coverChoiceRadios" class="file-type-choice hidden">
+              <label class="file-type-option">
+                <input type="radio" name="coverChoice" id="coverChoiceOriginal" value="original" checked />
+                Original cover
+              </label>
+              <label class="file-type-option">
+                <input type="radio" name="coverChoice" id="coverChoiceCustom" value="custom" />
+                Custom cover
+              </label>
+            </div>
+            <div class="cover-upload-row">
+              <label for="customCoverFile" class="btn-ghost cover-upload-btn">⬆️ Upload Cover Image</label>
+              <input type="file" id="customCoverFile" accept="image/*" class="hidden-file-input" />
+              <img id="customCoverPreview" class="custom-cover-thumb hidden" alt="Custom cover preview" />
+              <button id="removeCustomCoverBtn" class="btn-ghost hidden" type="button">✕ Remove</button>
+            </div>
+            <div class="search-row cover-url-row">
+              <input type="url" id="customCoverUrlInput" placeholder="…or paste an image URL" />
+              <button id="useCoverUrlBtn" class="btn-ghost" type="button">Use URL</button>
+            </div>
           </div>
           <p id="previewSourceRating" class="preview-source-rating hidden"></p>
           <p id="previewDuplicateWarning" class="preview-duplicate-warning hidden"></p>
@@ -172,6 +275,48 @@
           </div>
           <p id="publishResult" class="publish-result"></p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="publishReviewOverlay" class="overlay hidden">
+    <div class="preview-card review-card">
+      <div class="preview-card-header">
+        <h2>📤 Review Before Publishing</h2>
+        <button id="closePublishReview" class="close-x" aria-label="Close">✕</button>
+      </div>
+      <div class="preview-body">
+        <div class="preview-cover">
+          <img id="reviewCoverImg" alt="" />
+          <div id="reviewCoverFallback" class="cover-fallback hidden">No cover available</div>
+        </div>
+        <div class="preview-info">
+          <p class="preview-source" id="reviewSource"></p>
+          <h2 id="reviewTitle"></h2>
+          <p id="reviewAuthor" class="preview-author"></p>
+          <p id="reviewDescription" class="preview-description hidden"></p>
+          <ul id="reviewMetaList" class="review-meta-list"></ul>
+          <p id="reviewDuplicateWarning" class="preview-duplicate-warning hidden"></p>
+          <div class="preview-actions">
+            <button id="cancelPublishReviewBtn" class="btn-ghost">✕ Cancel</button>
+            <button id="confirmPublishReviewBtn" class="btn-primary">✅ Confirm &amp; Publish</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bulkPublishReviewOverlay" class="overlay hidden">
+    <div class="stats-card">
+      <div class="preview-card-header">
+        <h2>📤 Review Bulk Publish</h2>
+        <button id="closeBulkPublishReview" class="close-x" aria-label="Close">✕</button>
+      </div>
+      <p id="bulkReviewSummary" class="bulk-review-summary"></p>
+      <ul id="bulkReviewList" class="bulk-review-list"></ul>
+      <div class="preview-actions">
+        <button id="cancelBulkPublishReviewBtn" class="btn-ghost">✕ Cancel</button>
+        <button id="confirmBulkPublishReviewBtn" class="btn-primary">✅ Confirm &amp; Publish All</button>
       </div>
     </div>
   </div>

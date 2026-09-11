@@ -41,6 +41,12 @@ const bulkPublishBtn = document.getElementById("bulkPublishBtn");
 const bulkScheduleDateTime = document.getElementById("bulkScheduleDateTime");
 const bulkScheduleBtn = document.getElementById("bulkScheduleBtn");
 const bulkPublishStatus = document.getElementById("bulkPublishStatus");
+const bulkPublishReviewOverlay = document.getElementById("bulkPublishReviewOverlay");
+const closeBulkPublishReview = document.getElementById("closeBulkPublishReview");
+const bulkReviewSummary = document.getElementById("bulkReviewSummary");
+const bulkReviewList = document.getElementById("bulkReviewList");
+const cancelBulkPublishReviewBtn = document.getElementById("cancelBulkPublishReviewBtn");
+const confirmBulkPublishReviewBtn = document.getElementById("confirmBulkPublishReviewBtn");
 
 const overlay = document.getElementById("previewOverlay");
 const closePreview = document.getElementById("closePreview");
@@ -49,7 +55,22 @@ const previewCoverFallback = document.getElementById("previewCoverFallback");
 const previewSource = document.getElementById("previewSource");
 const previewTitle = document.getElementById("previewTitle");
 const previewAuthor = document.getElementById("previewAuthor");
-const previewDescription = document.getElementById("previewDescription");
+const publishReviewOverlay = document.getElementById("publishReviewOverlay");
+const closePublishReview = document.getElementById("closePublishReview");
+const reviewCoverImg = document.getElementById("reviewCoverImg");
+const reviewCoverFallback = document.getElementById("reviewCoverFallback");
+const reviewSource = document.getElementById("reviewSource");
+const reviewTitle = document.getElementById("reviewTitle");
+const reviewAuthor = document.getElementById("reviewAuthor");
+const reviewDescription = document.getElementById("reviewDescription");
+const reviewMetaList = document.getElementById("reviewMetaList");
+const reviewDuplicateWarning = document.getElementById("reviewDuplicateWarning");
+const cancelPublishReviewBtn = document.getElementById("cancelPublishReviewBtn");
+const confirmPublishReviewBtn = document.getElementById("confirmPublishReviewBtn");
+const previewDescriptionInput = document.getElementById("previewDescriptionInput");
+const rewriteDescriptionBtn = document.getElementById("rewriteDescriptionBtn");
+const previewDescriptionNote = document.getElementById("previewDescriptionNote");
+const previewDescriptionResult = document.getElementById("previewDescriptionResult");
 const previewFileState = document.getElementById("previewFileState");
 const previewFileSize = document.getElementById("previewFileSize");
 const previewFileSizeWarning = document.getElementById("previewFileSizeWarning");
@@ -58,6 +79,41 @@ const downloadLocalHint = document.getElementById("downloadLocalHint");
 const fileTypeChoice = document.getElementById("fileTypeChoice");
 const fileTypePdf = document.getElementById("fileTypePdf");
 const fileTypeEpub = document.getElementById("fileTypeEpub");
+const coverChoiceRadios = document.getElementById("coverChoiceRadios");
+const coverChoiceOriginal = document.getElementById("coverChoiceOriginal");
+const coverChoiceCustom = document.getElementById("coverChoiceCustom");
+const customCoverFile = document.getElementById("customCoverFile");
+const customCoverPreview = document.getElementById("customCoverPreview");
+const removeCustomCoverBtn = document.getElementById("removeCustomCoverBtn");
+const customCoverUrlInput = document.getElementById("customCoverUrlInput");
+const useCoverUrlBtn = document.getElementById("useCoverUrlBtn");
+
+// Manual entry form
+const resultsWrap = document.getElementById("resultsWrap");
+const manualField = document.getElementById("manualField");
+const manualTitleInput = document.getElementById("manualTitleInput");
+const manualAuthorInput = document.getElementById("manualAuthorInput");
+const manualDescriptionInput = document.getElementById("manualDescriptionInput");
+const checkCopyrightBtn = document.getElementById("checkCopyrightBtn");
+const copyrightResult = document.getElementById("copyrightResult");
+const manualCoverFile = document.getElementById("manualCoverFile");
+const manualCoverPreview = document.getElementById("manualCoverPreview");
+const manualRemoveCoverBtn = document.getElementById("manualRemoveCoverBtn");
+const manualCoverUrlInput = document.getElementById("manualCoverUrlInput");
+const manualUseCoverUrlBtn = document.getElementById("manualUseCoverUrlBtn");
+const manualBookFile = document.getElementById("manualBookFile");
+const manualBookFileName = document.getElementById("manualBookFileName");
+const manualRemoveFileBtn = document.getElementById("manualRemoveFileBtn");
+const manualFileUrlInput = document.getElementById("manualFileUrlInput");
+const manualUseFileUrlBtn = document.getElementById("manualUseFileUrlBtn");
+const manualFileTypeChoice = document.getElementById("manualFileTypeChoice");
+const manualFileTypePdf = document.getElementById("manualFileTypePdf");
+const manualFileTypeEpub = document.getElementById("manualFileTypeEpub");
+const extractInfoBtn = document.getElementById("extractInfoBtn");
+const extractInfoResult = document.getElementById("extractInfoResult");
+const manualPublishBtn = document.getElementById("manualPublishBtn");
+const manualPublishCoverOnlyBtn = document.getElementById("manualPublishCoverOnlyBtn");
+const manualPublishResult = document.getElementById("manualPublishResult");
 const previewDuplicateWarning = document.getElementById("previewDuplicateWarning");
 const previewSavedNote = document.getElementById("previewSavedNote");
 const previewScheduledNote = document.getElementById("previewScheduledNote");
@@ -89,12 +145,22 @@ let forceRepublish = false; // true if the user confirmed republishing an alread
 let selectedFileType = null; // "pdf" | "epub" | null — the chosen format for publishing
 let fileSizes = { pdf: null, epub: null }; // bytes, populated from the preview response
 let downloadUrls = { pdf: null, epub: null }; // direct file links, for the "download locally" fallback
+let coverChoice = "original"; // "original" | "custom" — which cover gets published
+let customCoverValue = null; // data: URI (uploaded file) or http(s) URL (pasted link) for the custom cover
+let manualCoverValue = null; // data: URI or URL for the manual-entry form's cover
+let manualFileValue = null; // data: URI or URL for the manual-entry form's book file
+let manualForceRepublish = false; // true if the user confirmed republishing an already-published manual entry
 let currentSourceRating = null; // the book's real reader rating from its source (Open Library /
                                  // Google Books), when one exists — read-only, never set by the user
 let isSaved = false; // whether currentItem is currently in the "saved for later" list
 let currentCategory = null; // the category label the user was browsing under when this book
                              // was picked (Browse mode only) — tagged onto publish/save/schedule
                              // purely so the stats dashboard can show "most active by category"
+let currentHasCover = false; // whether the currently previewed book has a cover — decides which
+                              // Telegram length limit (caption vs plain message) Rewrite-with-AI targets
+let pendingPublishFn = null; // callback the review-overlay's "Confirm & Publish" runs once the
+                              // user reviews and confirms — set by openPublishReviewForPreview()/
+                              // openPublishReviewForManual()
 let lastResults = []; // the most recently fetched (unfiltered) results — re-filtered/sorted
                        // in place when the rating filter changes, without a re-fetch
 let ratingFilter = "all"; // "all" | "rated" | "top" | "unrated"
@@ -212,11 +278,14 @@ async function jsonFetch(url, opts = {}) {
 async function loadSources() {
   const sources = await jsonFetch("/api/sources");
   realSourceIds = sources.map((s) => s.id);
+  const placeholder = `<option value="" disabled selected>— Choose a source —</option>`;
   const allOption = `<option value="${ALL_SOURCES_ID}">🌐 All Sources (search only)</option>`;
   const realOptions = sources.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
-  sourceSelect.innerHTML = allOption + realOptions;
-  sourceSelect.value = realSourceIds[0]; // default to a real source so Browse mode works out of the box
-  await loadCategories();
+  sourceSelect.innerHTML = placeholder + allOption + realOptions;
+  // No source is auto-selected and no category list is loaded yet — the catalog starts
+  // empty until the user actually picks a source (see unlockApp()), instead of always
+  // defaulting to — and immediately browsing — the first source in the list.
+  categorySelect.innerHTML = "";
 }
 
 async function loadCategories() {
@@ -227,12 +296,14 @@ async function loadCategories() {
 function setMode(newMode) {
   mode = newMode;
   tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
-  sourceField.classList.toggle("hidden", mode === "collection" || mode === "saved" || mode === "scheduled");
+  sourceField.classList.toggle("hidden", mode === "collection" || mode === "saved" || mode === "scheduled" || mode === "manual");
   categoryField.classList.toggle("hidden", mode !== "browse");
   searchField.classList.toggle("hidden", mode !== "search");
   collectionField.classList.toggle("hidden", mode !== "collection");
   savedSearchInput.classList.toggle("hidden", mode !== "saved");
-  ratingFilterSelect.parentElement.classList.toggle("hidden", mode === "scheduled");
+  ratingFilterSelect.parentElement.classList.toggle("hidden", mode === "scheduled" || mode === "manual");
+  manualField.classList.toggle("hidden", mode !== "manual");
+  resultsWrap.classList.toggle("hidden", mode === "manual");
   if (mode !== "saved") savedSearchInput.value = "";
   resultsList.innerHTML = "";
   statusLine.textContent = "";
@@ -558,6 +629,7 @@ async function scheduleCurrentBook() {
         publishCoverOnlyIfNoFile: publishCoverOnlyBtn.classList.contains("hidden") ? false : true,
         category: currentCategory,
         scheduledFor: localDate.toISOString(),
+        customDescription: previewDescriptionInput.value.trim(),
       }),
     });
     publishResult.textContent = `✅ Scheduled for ${localDate.toLocaleString("en")}.`;
@@ -580,8 +652,28 @@ function sleep(ms) {
 // here needs to be skipped for lack of a rating.
 const BULK_PUBLISH_DELAY_MS = 1800;
 
-async function runBulkPublish() {
+// Shows the list of currently-checked Saved Books and waits for an explicit
+// "Confirm & Publish All" before executeBulkPublish() actually sends anything.
+function runBulkPublish() {
   const items = Array.from(bulkSelected);
+  if (!items.length) return;
+
+  bulkReviewSummary.textContent = `About to publish ${items.length} book${items.length === 1 ? "" : "s"} to the channel:`;
+  bulkReviewList.innerHTML = items.map((r) => `<li>${r.line.replace(/^📌\s*/, "")}</li>`).join("");
+  bulkPublishReviewOverlay.classList.remove("hidden");
+}
+
+closeBulkPublishReview.addEventListener("click", () => bulkPublishReviewOverlay.classList.add("hidden"));
+cancelBulkPublishReviewBtn.addEventListener("click", () => bulkPublishReviewOverlay.classList.add("hidden"));
+bulkPublishReviewOverlay.addEventListener("click", (e) => {
+  if (e.target === bulkPublishReviewOverlay) bulkPublishReviewOverlay.classList.add("hidden");
+});
+confirmBulkPublishReviewBtn.addEventListener("click", () => {
+  bulkPublishReviewOverlay.classList.add("hidden");
+  executeBulkPublish(Array.from(bulkSelected));
+});
+
+async function executeBulkPublish(items) {
   if (!items.length) return;
 
   bulkPublishBtn.disabled = true;
@@ -629,7 +721,7 @@ async function runBulkPublish() {
 }
 
 // Schedules every checked Saved Book for the same target time, one request after another
-// with the same flood-control delay as runBulkPublish. All sharing one scheduledFor is
+// with the same flood-control delay as executeBulkPublish. All sharing one scheduledFor is
 // fine — the scheduled-publish cron already sleeps between each due record when it sends
 // them (see scheduled-publish.js), so a same-time batch still goes out spread apart.
 async function runBulkSchedule() {
@@ -715,8 +807,14 @@ async function openPreview(item, sourceId, category = null) {
   overlay.classList.remove("hidden");
   previewTitle.textContent = "Loading…";
   previewAuthor.textContent = "";
-  previewDescription.textContent = "";
-  previewDescription.classList.add("hidden");
+  previewDescriptionInput.value = "";
+  previewDescriptionNote.classList.add("hidden");
+  previewDescriptionNote.textContent = "";
+  previewDescriptionResult.classList.add("hidden");
+  previewDescriptionResult.innerHTML = "";
+  rewriteDescriptionBtn.disabled = false;
+  rewriteDescriptionBtn.textContent = "🪄 Rewrite with AI";
+  currentHasCover = false;
   previewFileState.textContent = "";
   previewFileSize.textContent = "";
   previewFileSize.classList.add("hidden");
@@ -726,6 +824,15 @@ async function openPreview(item, sourceId, category = null) {
   downloadLocalBtn.removeAttribute("href");
   fileTypeChoice.classList.add("hidden");
   fileTypePdf.checked = true;
+  coverChoice = "original";
+  customCoverValue = null;
+  customCoverFile.value = "";
+  customCoverUrlInput.value = "";
+  customCoverPreview.classList.add("hidden");
+  customCoverPreview.removeAttribute("src");
+  removeCustomCoverBtn.classList.add("hidden");
+  coverChoiceRadios.classList.add("hidden");
+  coverChoiceOriginal.checked = true;
   previewDuplicateWarning.classList.add("hidden");
   previewDuplicateWarning.textContent = "";
   isSaved = false;
@@ -753,12 +860,11 @@ async function openPreview(item, sourceId, category = null) {
     previewTitle.textContent = book.title;
     previewAuthor.textContent = book.author;
 
-    if (book.description) {
-      previewDescription.textContent = book.description;
-      previewDescription.classList.remove("hidden");
-    } else {
-      previewDescription.textContent = "";
-      previewDescription.classList.add("hidden");
+    previewDescriptionInput.value = book.description || "";
+    currentHasCover = !!book.cover_url;
+    if (book.description_is_custom) {
+      previewDescriptionNote.textContent = "✏️ Previously edited/rewritten — kept instead of the source's description.";
+      previewDescriptionNote.classList.remove("hidden");
     }
 
     if (book.cover_url) {
@@ -831,6 +937,103 @@ async function openPreview(item, sourceId, category = null) {
   }
 }
 
+// Shows a summary of exactly what's about to be sent to the Telegram channel — title,
+// author, description (including any AI-rewritten/edited version), cover, and format —
+// and waits for an explicit "Confirm & Publish" before `onConfirm` actually runs. Used by
+// both the preview-screen publish flow and the "Add Manually" publish flow, each of which
+// builds its own `fields` from its own form state and passes the right onConfirm callback.
+function showPublishReview(fields, onConfirm) {
+  pendingPublishFn = onConfirm;
+
+  reviewSource.textContent = fields.source || "";
+  reviewTitle.textContent = fields.title || "";
+  reviewAuthor.textContent = fields.author || "";
+
+  const desc = (fields.description || "").trim();
+  if (desc) {
+    reviewDescription.textContent = desc;
+    reviewDescription.classList.remove("hidden");
+  } else {
+    reviewDescription.textContent = "";
+    reviewDescription.classList.add("hidden");
+  }
+
+  if (fields.coverSrc) {
+    reviewCoverImg.src = fields.coverSrc;
+    reviewCoverImg.classList.remove("hidden");
+    reviewCoverFallback.classList.add("hidden");
+  } else {
+    reviewCoverImg.classList.add("hidden");
+    reviewCoverFallback.classList.remove("hidden");
+  }
+
+  const metaItems = [`<li><strong>Sending:</strong> ${fields.formatLabel}</li>`];
+  if (fields.rating) {
+    metaItems.push(`<li><strong>Rating:</strong> ${"⭐".repeat(fields.rating)}</li>`);
+  }
+  if (fields.category) {
+    metaItems.push(`<li><strong>Category:</strong> ${fields.category}</li>`);
+  }
+  reviewMetaList.innerHTML = metaItems.join("");
+
+  if (fields.alreadyPublished) {
+    reviewDuplicateWarning.textContent = "⚠️ This book was already published before — confirming will publish it again.";
+    reviewDuplicateWarning.classList.remove("hidden");
+  } else {
+    reviewDuplicateWarning.classList.add("hidden");
+  }
+
+  publishReviewOverlay.classList.remove("hidden");
+}
+
+// Preview-screen publish flow: pulls everything from the preview panel's current state.
+function openPublishReviewForPreview(coverOnly) {
+  const coverSrc = coverChoice === "custom" ? customCoverValue : previewCoverImg.src;
+  showPublishReview(
+    {
+      source: previewSource.textContent,
+      title: previewTitle.textContent,
+      author: previewAuthor.textContent,
+      description: previewDescriptionInput.value,
+      coverSrc,
+      formatLabel: coverOnly ? "Cover image only (no downloadable file)" : selectedFileType ? selectedFileType.toUpperCase() + " file" : "—",
+      rating: currentSourceRating,
+      category: currentCategory,
+      alreadyPublished: forceRepublish,
+    },
+    () => publish(coverOnly)
+  );
+}
+
+// "Add Manually" publish flow: pulls everything from the manual-entry form's current state.
+function openPublishReviewForManual(coverOnly) {
+  const coverSrc = manualCoverValue || (manualCoverPreview.classList.contains("hidden") ? null : manualCoverPreview.src);
+  showPublishReview(
+    {
+      source: "Manual entry",
+      title: manualTitleInput.value.trim(),
+      author: manualAuthorInput.value.trim(),
+      description: manualDescriptionInput.value,
+      coverSrc,
+      formatLabel: coverOnly ? "Cover image only (no downloadable file)" : (manualFileTypeEpub.checked ? "EPUB" : "PDF") + " file",
+      rating: null,
+      category: null,
+      alreadyPublished: manualForceRepublish,
+    },
+    () => publishManual(coverOnly)
+  );
+}
+
+closePublishReview.addEventListener("click", () => publishReviewOverlay.classList.add("hidden"));
+cancelPublishReviewBtn.addEventListener("click", () => publishReviewOverlay.classList.add("hidden"));
+publishReviewOverlay.addEventListener("click", (e) => {
+  if (e.target === publishReviewOverlay) publishReviewOverlay.classList.add("hidden");
+});
+confirmPublishReviewBtn.addEventListener("click", () => {
+  publishReviewOverlay.classList.add("hidden");
+  if (pendingPublishFn) pendingPublishFn();
+});
+
 async function publish(coverOnly) {
   publishResult.textContent = "Publishing…";
   publishBtn.disabled = true;
@@ -846,6 +1049,8 @@ async function publish(coverOnly) {
         force: forceRepublish,
         fileType: selectedFileType,
         category: currentCategory,
+        customCoverUrl: coverChoice === "custom" ? customCoverValue : null,
+        customDescription: previewDescriptionInput.value.trim(),
       }),
     });
 
@@ -874,14 +1079,368 @@ async function publish(coverOnly) {
   }
 }
 
+rewriteDescriptionBtn.addEventListener("click", async () => {
+  const title = previewTitle.textContent.trim();
+  if (!title) return;
+
+  rewriteDescriptionBtn.disabled = true;
+  rewriteDescriptionBtn.textContent = "Rewriting…";
+  previewDescriptionResult.innerHTML = "";
+  previewDescriptionResult.textContent = "Asking Gemini to rewrite the description…";
+  previewDescriptionResult.classList.remove("hidden");
+  try {
+    const data = await jsonFetch("/api/generate-description", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        author: previewAuthor.textContent.trim(),
+        description: previewDescriptionInput.value,
+        has_cover: currentHasCover,
+      }),
+    });
+    if (data.description) {
+      previewDescriptionInput.value = data.description;
+      previewDescriptionNote.textContent = "✏️ Rewritten with AI — review before publishing.";
+      previewDescriptionNote.classList.remove("hidden");
+      previewDescriptionResult.textContent = "✅ Description rewritten. Review it above before publishing.";
+    } else {
+      previewDescriptionResult.textContent = "⚠️ Gemini couldn't confidently write a description for this book — try editing it by hand instead.";
+    }
+  } catch (e) {
+    previewDescriptionResult.textContent = `⚠️ ${e.message}`;
+  } finally {
+    rewriteDescriptionBtn.disabled = false;
+    rewriteDescriptionBtn.textContent = "🪄 Rewrite with AI";
+  }
+});
+
+// ===================== Manual entry (add a book by hand) =====================
+
+function resetManualForm() {
+  manualTitleInput.value = "";
+  manualAuthorInput.value = "";
+  manualDescriptionInput.value = "";
+  copyrightResult.classList.add("hidden");
+  copyrightResult.innerHTML = "";
+  extractInfoResult.classList.add("hidden");
+  extractInfoResult.innerHTML = "";
+  manualCoverValue = null;
+  manualCoverFile.value = "";
+  manualCoverUrlInput.value = "";
+  manualCoverPreview.classList.add("hidden");
+  manualCoverPreview.removeAttribute("src");
+  manualRemoveCoverBtn.classList.add("hidden");
+  manualFileValue = null;
+  manualBookFile.value = "";
+  manualFileUrlInput.value = "";
+  manualBookFileName.classList.add("hidden");
+  manualBookFileName.textContent = "";
+  manualRemoveFileBtn.classList.add("hidden");
+  manualFileTypeChoice.classList.add("hidden");
+  manualFileTypePdf.checked = true;
+  manualPublishResult.textContent = "";
+  manualForceRepublish = false;
+  manualPublishBtn.textContent = "Publish to Channel";
+  manualPublishCoverOnlyBtn.textContent = "Publish Cover Only";
+  updateManualPublishButtons();
+}
+
+function updateManualPublishButtons() {
+  const hasFile = !!manualFileValue;
+  manualPublishBtn.classList.toggle("hidden", !hasFile);
+  manualPublishCoverOnlyBtn.classList.toggle("hidden", hasFile);
+}
+
+const VERDICT_LABELS = {
+  likely_public_domain: "✅ Likely public domain / openly licensed",
+  likely_copyrighted: "⚠️ Likely still copyrighted",
+  no_match: "❔ No match found in any catalog",
+  uncertain: "❔ Uncertain — mixed signals",
+};
+
+function renderCopyrightResult(data) {
+  copyrightResult.innerHTML = "";
+
+  const verdict = document.createElement("p");
+  verdict.className = `copyright-verdict ${data.verdict}`;
+  verdict.textContent = VERDICT_LABELS[data.verdict] || data.verdict;
+  copyrightResult.appendChild(verdict);
+
+  const summary = document.createElement("p");
+  summary.textContent = data.summary;
+  copyrightResult.appendChild(summary);
+
+  const list = document.createElement("ul");
+  list.className = "copyright-signals";
+  (data.signals || []).forEach((s) => {
+    const li = document.createElement("li");
+    li.textContent = `${s.source}: ${s.note}`;
+    list.appendChild(li);
+  });
+  copyrightResult.appendChild(list);
+
+  const disclaimer = document.createElement("p");
+  disclaimer.className = "copyright-disclaimer";
+  disclaimer.textContent = data.disclaimer;
+  copyrightResult.appendChild(disclaimer);
+
+  copyrightResult.classList.remove("hidden");
+}
+
+checkCopyrightBtn.addEventListener("click", async () => {
+  const title = manualTitleInput.value.trim();
+  if (!title) {
+    copyrightResult.innerHTML = "";
+    copyrightResult.textContent = "⚠️ Enter a title first.";
+    copyrightResult.classList.remove("hidden");
+    return;
+  }
+  checkCopyrightBtn.disabled = true;
+  checkCopyrightBtn.textContent = "Checking…";
+  copyrightResult.innerHTML = "";
+  copyrightResult.textContent = "Checking Project Gutenberg, Google Books, and Open Library…";
+  copyrightResult.classList.remove("hidden");
+  try {
+    const data = await jsonFetch("/api/copyright-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, author: manualAuthorInput.value.trim() }),
+    });
+    renderCopyrightResult(data);
+  } catch (e) {
+    copyrightResult.innerHTML = "";
+    copyrightResult.textContent = `⚠️ ${e.message}`;
+  } finally {
+    checkCopyrightBtn.disabled = false;
+    checkCopyrightBtn.textContent = "🔍 Check Copyright Status";
+  }
+});
+
+extractInfoBtn.addEventListener("click", async () => {
+  if (!manualCoverValue && !manualFileValue) {
+    extractInfoResult.innerHTML = "";
+    extractInfoResult.textContent = "⚠️ Add a cover image or a book file first.";
+    extractInfoResult.classList.remove("hidden");
+    return;
+  }
+  const fileType = manualFileValue ? (manualFileTypeEpub.checked ? "epub" : "pdf") : null;
+
+  extractInfoBtn.disabled = true;
+  extractInfoBtn.textContent = "Reading with AI…";
+  extractInfoResult.innerHTML = "";
+  extractInfoResult.textContent = "Reading the cover/file with Gemini — this can take a little while for larger PDFs…";
+  extractInfoResult.classList.remove("hidden");
+  try {
+    const data = await jsonFetch("/api/extract-book-info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cover_url: manualCoverValue,
+        file_url: manualFileValue,
+        file_type: fileType,
+        has_cover: !!manualCoverValue,
+      }),
+    });
+    if (data.title) manualTitleInput.value = data.title;
+    if (data.author) manualAuthorInput.value = data.author;
+    if (data.description) manualDescriptionInput.value = data.description;
+
+    const filled = [
+      data.title ? "title" : null,
+      data.author ? "author" : null,
+      data.description ? "description" : null,
+    ].filter(Boolean);
+    let message = filled.length
+      ? `✅ Filled in: ${filled.join(", ")}. Review before publishing.`
+      : "⚠️ Gemini couldn't confidently determine any of the fields from what was provided.";
+    if (data.warnings && data.warnings.length) {
+      message += ` (${data.warnings.join(" ")})`;
+    }
+    extractInfoResult.textContent = message;
+  } catch (e) {
+    extractInfoResult.textContent = `⚠️ ${e.message}`;
+  } finally {
+    extractInfoBtn.disabled = false;
+    extractInfoBtn.textContent = "✨ Extract Title/Author/Description with AI";
+  }
+});
+
+const MAX_MANUAL_COVER_MB = 1.5;
+const MAX_MANUAL_FILE_MB = 3.5;
+
+manualCoverFile.addEventListener("change", () => {
+  const file = manualCoverFile.files && manualCoverFile.files[0];
+  if (!file) return;
+  if (file.size > MAX_MANUAL_COVER_MB * 1024 * 1024) {
+    manualPublishResult.textContent = `⚠️ Cover image is too large (max ${MAX_MANUAL_COVER_MB}MB) — pick a smaller file or paste a URL instead.`;
+    manualCoverFile.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    manualCoverValue = reader.result;
+    manualCoverUrlInput.value = "";
+    manualCoverPreview.src = manualCoverValue;
+    manualCoverPreview.classList.remove("hidden");
+    manualRemoveCoverBtn.classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
+});
+
+manualUseCoverUrlBtn.addEventListener("click", () => {
+  const url = manualCoverUrlInput.value.trim();
+  if (!url) return;
+  manualCoverValue = url;
+  manualCoverFile.value = "";
+  manualCoverPreview.src = url;
+  manualCoverPreview.classList.remove("hidden");
+  manualRemoveCoverBtn.classList.remove("hidden");
+});
+
+manualRemoveCoverBtn.addEventListener("click", () => {
+  manualCoverValue = null;
+  manualCoverFile.value = "";
+  manualCoverUrlInput.value = "";
+  manualCoverPreview.classList.add("hidden");
+  manualCoverPreview.removeAttribute("src");
+  manualRemoveCoverBtn.classList.add("hidden");
+});
+
+manualBookFile.addEventListener("change", () => {
+  const file = manualBookFile.files && manualBookFile.files[0];
+  if (!file) return;
+  if (file.size > MAX_MANUAL_FILE_MB * 1024 * 1024) {
+    manualPublishResult.textContent = `⚠️ File is too large (max ${MAX_MANUAL_FILE_MB}MB for direct upload) — paste a direct file URL instead.`;
+    manualBookFile.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    manualFileValue = reader.result;
+    manualFileUrlInput.value = "";
+    manualBookFileName.textContent = `📄 ${file.name}`;
+    manualBookFileName.classList.remove("hidden");
+    manualRemoveFileBtn.classList.remove("hidden");
+    manualFileTypeChoice.classList.remove("hidden");
+    // Pre-select the format from the file extension, still overridable by the user.
+    if (/\.epub$/i.test(file.name)) {
+      manualFileTypeEpub.checked = true;
+    } else {
+      manualFileTypePdf.checked = true;
+    }
+    updateManualPublishButtons();
+  };
+  reader.readAsDataURL(file);
+});
+
+manualUseFileUrlBtn.addEventListener("click", () => {
+  const url = manualFileUrlInput.value.trim();
+  if (!url) return;
+  manualFileValue = url;
+  manualBookFile.value = "";
+  manualBookFileName.textContent = `🔗 ${url}`;
+  manualBookFileName.classList.remove("hidden");
+  manualRemoveFileBtn.classList.remove("hidden");
+  manualFileTypeChoice.classList.remove("hidden");
+  if (/\.epub(\?|$)/i.test(url)) {
+    manualFileTypeEpub.checked = true;
+  } else {
+    manualFileTypePdf.checked = true;
+  }
+  updateManualPublishButtons();
+});
+
+manualRemoveFileBtn.addEventListener("click", () => {
+  manualFileValue = null;
+  manualBookFile.value = "";
+  manualFileUrlInput.value = "";
+  manualBookFileName.classList.add("hidden");
+  manualBookFileName.textContent = "";
+  manualRemoveFileBtn.classList.add("hidden");
+  manualFileTypeChoice.classList.add("hidden");
+  updateManualPublishButtons();
+});
+
+async function publishManual(coverOnly) {
+  const title = manualTitleInput.value.trim();
+  if (!title) {
+    manualPublishResult.textContent = "⚠️ Title is required.";
+    return;
+  }
+  if (!manualCoverValue && !manualFileValue) {
+    manualPublishResult.textContent = "⚠️ Add at least a cover or a book file.";
+    return;
+  }
+  manualPublishResult.textContent = "Publishing…";
+  manualPublishBtn.disabled = true;
+  manualPublishCoverOnlyBtn.disabled = true;
+  try {
+    const data = await jsonFetch("/api/publish-manual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        author: manualAuthorInput.value.trim(),
+        description: manualDescriptionInput.value.trim(),
+        cover_url: manualCoverValue,
+        download_url: manualFileValue,
+        fileType: manualFileTypeEpub.checked ? "epub" : "pdf",
+        publishCoverOnlyIfNoFile: coverOnly,
+        force: manualForceRepublish,
+      }),
+    });
+
+    if (data.status === "duplicate") {
+      manualForceRepublish = true;
+      manualPublishResult.textContent = data.message;
+      manualPublishBtn.textContent = "Publish Anyway";
+      manualPublishCoverOnlyBtn.textContent = "Publish Cover Anyway";
+      return;
+    }
+
+    manualPublishResult.textContent = `✅ ${data.message}`;
+  } catch (e) {
+    manualPublishResult.textContent = `⚠️ ${e.message}`;
+  } finally {
+    manualPublishBtn.disabled = false;
+    manualPublishCoverOnlyBtn.disabled = false;
+  }
+}
+
+function validateManualBeforeReview() {
+  if (!manualTitleInput.value.trim()) {
+    manualPublishResult.textContent = "⚠️ Title is required.";
+    return false;
+  }
+  if (!manualCoverValue && !manualFileValue) {
+    manualPublishResult.textContent = "⚠️ Add at least a cover or a book file.";
+    return false;
+  }
+  return true;
+}
+
+manualPublishBtn.addEventListener("click", () => {
+  if (validateManualBeforeReview()) openPublishReviewForManual(false);
+});
+manualPublishCoverOnlyBtn.addEventListener("click", () => {
+  if (validateManualBeforeReview()) openPublishReviewForManual(true);
+});
+
 async function toggleSave() {
   saveBtn.disabled = true;
   const endpoint = isSaved ? "/api/unsave" : "/api/save";
+  const body = { source: currentItemSource, item: currentItem, category: currentCategory };
+  if (!isSaved) {
+    // Only relevant when saving (not unsaving) — carries forward whatever's currently in
+    // the description field (original, hand-edited, or AI-rewritten) so it isn't lost.
+    body.customDescription = previewDescriptionInput.value.trim();
+  }
   try {
     await jsonFetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: currentItemSource, item: currentItem, category: currentCategory }),
+      body: JSON.stringify(body),
     });
     isSaved = !isSaved;
     if (isSaved) {
@@ -932,6 +1491,7 @@ tabs.forEach((t) =>
     setMode(t.dataset.mode);
     if (t.dataset.mode === "saved") runSaved(); // no input to submit first, so load right away
     if (t.dataset.mode === "scheduled") runScheduled();
+    if (t.dataset.mode === "manual") resetManualForm();
   })
 );
 categorySelect.addEventListener("change", () => runCurrentQuery(false));
@@ -948,8 +1508,8 @@ closePreview.addEventListener("click", () => overlay.classList.add("hidden"));
 overlay.addEventListener("click", (e) => {
   if (e.target === overlay) overlay.classList.add("hidden");
 });
-publishBtn.addEventListener("click", () => publish(false));
-publishCoverOnlyBtn.addEventListener("click", () => publish(true));
+publishBtn.addEventListener("click", () => openPublishReviewForPreview(false));
+publishCoverOnlyBtn.addEventListener("click", () => openPublishReviewForPreview(true));
 saveBtn.addEventListener("click", () => toggleSave());
 fileTypePdf.addEventListener("change", () => {
   if (fileTypePdf.checked) selectedFileType = "pdf";
@@ -959,6 +1519,61 @@ fileTypeEpub.addEventListener("change", () => {
   if (fileTypeEpub.checked) selectedFileType = "epub";
   updateFileSizeDisplay();
 });
+
+function showCustomCoverPreview(src) {
+  customCoverPreview.src = src;
+  customCoverPreview.classList.remove("hidden");
+  removeCustomCoverBtn.classList.remove("hidden");
+  coverChoiceRadios.classList.remove("hidden");
+  coverChoice = "custom";
+  coverChoiceCustom.checked = true;
+}
+
+customCoverFile.addEventListener("change", () => {
+  const file = customCoverFile.files && customCoverFile.files[0];
+  if (!file) return;
+  const MAX_UPLOAD_MB = 5;
+  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+    publishResult.textContent = `⚠️ Image is too large (max ${MAX_UPLOAD_MB}MB) — pick a smaller file.`;
+    customCoverFile.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    customCoverValue = reader.result; // data:image/...;base64,...
+    customCoverUrlInput.value = "";
+    showCustomCoverPreview(customCoverValue);
+  };
+  reader.readAsDataURL(file);
+});
+
+useCoverUrlBtn.addEventListener("click", () => {
+  const url = customCoverUrlInput.value.trim();
+  if (!url) return;
+  customCoverValue = url;
+  customCoverFile.value = "";
+  showCustomCoverPreview(url);
+});
+
+removeCustomCoverBtn.addEventListener("click", () => {
+  customCoverValue = null;
+  customCoverFile.value = "";
+  customCoverUrlInput.value = "";
+  customCoverPreview.classList.add("hidden");
+  customCoverPreview.removeAttribute("src");
+  removeCustomCoverBtn.classList.add("hidden");
+  coverChoiceRadios.classList.add("hidden");
+  coverChoice = "original";
+  coverChoiceOriginal.checked = true;
+});
+
+coverChoiceOriginal.addEventListener("change", () => {
+  if (coverChoiceOriginal.checked) coverChoice = "original";
+});
+coverChoiceCustom.addEventListener("change", () => {
+  if (coverChoiceCustom.checked) coverChoice = "custom";
+});
+
 scheduleBtn.addEventListener("click", () => scheduleCurrentBook());
 
 bulkSelectAll.addEventListener("change", () => {
@@ -1203,7 +1818,7 @@ async function unlockApp() {
   loginOverlay.classList.add("hidden");
   mainCatalog.classList.remove("hidden");
   await loadSources();
-  await runBrowse(false);
+  statusLine.textContent = "Choose a source above to browse, or switch to Search.";
 }
 
 async function attemptLogin(password) {
