@@ -12,6 +12,7 @@
 //   4 OAPEN                  -> DSpace item uuid/handle
 //   5 Google Books           -> volume id
 //   6 DOAB                   -> DSpace item uuid/handle
+//   manual (manual entry)    -> lowercased "title|author"
 function getStableId(sourceId, item) {
   const id = String(sourceId);
   let value;
@@ -36,6 +37,9 @@ function getStableId(sourceId, item) {
       break;
     case "5":
       value = item.id;
+      break;
+    case "manual":
+      value = `${String(item.title || "").trim().toLowerCase()}|${String(item.author || "").trim().toLowerCase()}`;
       break;
     default:
       value = null;

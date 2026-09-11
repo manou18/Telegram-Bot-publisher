@@ -86,12 +86,19 @@ async function sendCoverAndCaption(book) {
       await sendPhotoBuffer(CHANNEL_ID, mockupBuffer, caption);
     } catch (mockupError) {
       console.warn(`Failed to build the 3D cover mockup (${mockupError.message}), falling back to the plain cover.`);
-      await telegramPost("sendPhoto", {
-        chat_id: CHANNEL_ID,
-        photo: paddedCoverUrl(book.cover_url),
-        caption,
-        parse_mode: "HTML",
-      });
+      if (book.cover_url.startsWith("data:")) {
+        // A manually uploaded cover — can't be proxied through wsrv.nl (it needs a fetchable
+        // URL), so send the decoded image bytes directly instead.
+        const base64 = book.cover_url.split(",")[1] || "";
+        await sendPhotoBuffer(CHANNEL_ID, Buffer.from(base64, "base64"), caption);
+      } else {
+        await telegramPost("sendPhoto", {
+          chat_id: CHANNEL_ID,
+          photo: paddedCoverUrl(book.cover_url),
+          caption,
+          parse_mode: "HTML",
+        });
+      }
     }
   } else {
     await telegramPost("sendMessage", { chat_id: CHANNEL_ID, text: caption, parse_mode: "HTML" });
@@ -105,6 +112,30 @@ async function sendCoverAndCaption(book) {
 // and then uploading it as an actual file (multipart), which supports up to 50 MB via direct upload.
 async function sendBookFile(book) {
   const { BOT_TOKEN, CHANNEL_ID } = getCreds();
+
+  if (book.download_url.startsWith("data:")) {
+    // Manually uploaded file, small enough to have been embedded as base64 — decode and
+    // upload directly, no URL to fetch.
+    const match = book.download_url.match(/^data:([^;]+);base64,(.+)$/s);
+    const mime = match ? match[1] : "application/octet-stream";
+    const base64 = match ? match[2] : book.download_url.split(",")[1] || "";
+    const buffer = Buffer.from(base64, "base64");
+    const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      throw new Error(`File size (${(buffer.length / 1024 / 1024).toFixed(1)} MB) exceeds the bot's upload limit (50 MB).`);
+    }
+    const ext = mime.includes("epub") ? ".epub" : ".pdf";
+    const form = new FormData();
+    form.append("chat_id", CHANNEL_ID);
+    form.append("document", new Blob([buffer], { type: mime }), `book${ext}`);
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.description || "Failed to upload the manually provided file.");
+    return;
+  }
 
   try {
     await telegramPost("sendDocument", { chat_id: CHANNEL_ID, document: book.download_url });

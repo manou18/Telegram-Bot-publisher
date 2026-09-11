@@ -49,7 +49,21 @@ async function fetchJson(url, attempt = 1) {
         : " Try again later or try the other source.";
     throw new Error(`Could not fetch data from the external source (status ${r.status}).${hint}`);
   }
-  return r.json();
+
+  try {
+    return await r.json();
+  } catch (e) {
+    // A 200 response with a "json" content-type doesn't guarantee a complete body — a
+    // response cut off mid-transfer (seen from OAPEN when a query's result set is large)
+    // still passes the checks above but fails to parse, surfacing as a bare "Unexpected
+    // end of JSON input" if left unguarded. Retry like any other transient failure first.
+    console.error(`Failed to parse JSON from ${url} — attempt ${attempt}/${MAX_ATTEMPTS}: ${e.message}`);
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(attempt * 500);
+      return fetchJson(url, attempt + 1);
+    }
+    throw new Error("The source returned an incomplete or invalid response. Try again later or try another source.");
+  }
 }
 
 const GUTENBERG_CATEGORIES = {
@@ -306,6 +320,8 @@ const ARCHIVE_EDU_CATEGORIES = {
   5: "TEFL TESL teaching english foreign language",
   6: "curriculum instruction teaching methods",
   7: "education",
+  8: "second language acquisition",
+  9: "educational technology",
 };
 
 async function archiveEduAdvancedSearch(event, query, pageToken) {
@@ -411,8 +427,48 @@ async function oapenSearchRaw(event, queryString, pageToken) {
   return { results, next };
 }
 
+// A DSpace 5 item's own UUID, wherever it shows up on the record. OAPEN's REST API docs
+// point at a "uuid" field, but since we can't be 100% sure of the exact casing/location on
+// every record shape, we also fall back to scanning the metadata for anything that's
+// shaped like a UUID before giving up.
+function oapenExtractUuid(entity) {
+  if (!entity) return null;
+  if (typeof entity.uuid === "string") return entity.uuid;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  for (const m of entity.metadata || []) {
+    if (typeof m.value === "string" && uuidPattern.test(m.value)) return m.value;
+  }
+  return null;
+}
+
+// Per OAPEN's own REST API docs (oapen.org/article/8185269), querying `publisher.name:"X"`
+// does NOT return that publisher's books — it returns the publisher's own entity record,
+// which carries a repeated "oapen.relation.isPublisherOf" field listing every book it's
+// ever published, with no details attached. For a large publisher (e.g. Springer Nature,
+// with thousands of titles) that entity record can be big enough that the response gets cut
+// off mid-transfer, which is exactly what caused the "Unexpected end of JSON input" error.
+// The documented, correct approach is two steps: resolve the publisher's UUID from its name
+// first, then list its actual publications via the oapen.relation.isPublishedBy field.
+async function oapenResolvePublisherUuid(event, publisherName) {
+  const url = `${OAPEN_BASE}/rest/search?query=${encodeURIComponent(
+    `publisher.name:"${publisherName}"`
+  )}&expand=metadata&limit=5&offset=0`;
+  const data = await cachedFetchJson(event, url, fetchJson);
+  const results = Array.isArray(data) ? data : [];
+  for (const entity of results) {
+    const uuid = oapenExtractUuid(entity);
+    if (uuid) return uuid;
+  }
+  return null;
+}
+
 async function oapenBrowseCategory(event, publisherName, pageToken) {
-  return oapenSearchRaw(event, `publisher.name:"${publisherName}"`, pageToken);
+  // The resolved UUID is cheap to look up (a small, single-record response) and gets its
+  // own cache entry via cachedFetchJson, so repeat browses of the same publisher/category
+  // don't pay for this extra round-trip beyond the first time within the cache window.
+  const uuid = await oapenResolvePublisherUuid(event, publisherName);
+  if (!uuid) return { results: [], next: null };
+  return oapenSearchRaw(event, `oapen.relation.isPublishedBy:"${uuid}"`, pageToken);
 }
 
 async function oapenSearch(event, query, pageToken) {
@@ -424,9 +480,21 @@ function oapenAuthors(item) {
   return authors.length ? authors.join(", ") : "Unknown";
 }
 
+// Whether this item has an actual PDF hosted on OAPEN itself. Some aggregated publishers
+// (particularly large commercial ones) only let OAPEN index their metadata, with the real
+// file living on the publisher's own site — those records are entirely legitimate, but
+// there's nothing to publish directly. `expand=bitstreams` is already part of every OAPEN
+// list request (see oapenSearchRaw), so this is free — no extra request needed.
+function oapenHasDirectFile(item) {
+  return (item.bitstreams || []).some(
+    (b) => b.bundleName === "ORIGINAL" && (b.mimeType === "application/pdf" || /\.pdf$/i.test(b.name || ""))
+  );
+}
+
 function oapenDisplayLine(item) {
   const title = oapenMetaValue(item.metadata, "dc.title") || item.name || "Untitled";
-  return `${title}  —  ${oapenAuthors(item)}`;
+  const noFileTag = oapenHasDirectFile(item) ? "" : " 🔒 no direct file";
+  return `${title}${noFileTag}  —  ${oapenAuthors(item)}`;
 }
 
 async function oapenBuildBook(item) {
@@ -695,4 +763,4 @@ const SOURCES = {
   },
 };
 
-module.exports = { SOURCES, archiveEduAdvancedSearch };
+module.exports = { SOURCES, archiveEduAdvancedSearch, fetchJson };

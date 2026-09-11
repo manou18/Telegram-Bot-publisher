@@ -15,7 +15,7 @@ function getScheduledStore(event) {
   return getStore("scheduled-books");
 }
 
-async function scheduleBook(event, { sourceId, item, title, author, cover_url, source, category, rating, fileType, publishCoverOnlyIfNoFile, scheduledFor }) {
+async function scheduleBook(event, { sourceId, item, title, author, cover_url, source, category, rating, fileType, publishCoverOnlyIfNoFile, scheduledFor, description }) {
   const store = getScheduledStore(event);
   const id = crypto.randomUUID();
   const record = {
@@ -28,6 +28,11 @@ async function scheduleBook(event, { sourceId, item, title, author, cover_url, s
     source,
     category: category || null,
     rating: rating || null,
+    // User-edited or AI-rewritten description from the preview screen, if any — used
+    // instead of the raw source description when the cron job publishes this later (see
+    // scheduled-publish.js). Rebuilt-fresh fields like the download URL still come from
+    // buildBook() at publish time; only this text snapshot is carried forward early.
+    description: typeof description === "string" ? description : null,
     fileType: fileType || null,
     publishCoverOnlyIfNoFile: !!publishCoverOnlyIfNoFile,
     scheduledFor,

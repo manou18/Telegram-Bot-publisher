@@ -33,8 +33,11 @@ async function checkSaved(event, sourceId, item) {
 // display snapshot (title/author/cover/source label/reader rating) without having to
 // rebuild it every time the saved list is loaded. `rating` is optional and no longer set
 // by the UI (kept for direct API callers); `source_rating` is the book's real reader
-// rating pulled from its source, when one exists.
-async function saveBook(event, sourceId, item, book, rating, category) {
+// rating pulled from its source, when one exists. `description` is optional — a
+// user-edited or AI-rewritten description from the preview screen, kept alongside the
+// snapshot so it survives the trip through "Saved" and is used instead of the raw source
+// description when this book is eventually published (see preview.js and publish.js).
+async function saveBook(event, sourceId, item, book, rating, category, description) {
   const store = getSavedStore(event);
   const key = keyFor(sourceId, item);
   const record = {
@@ -48,6 +51,7 @@ async function saveBook(event, sourceId, item, book, rating, category) {
     category: category || null,
     rating: rating || null,
     source_rating: typeof book.source_rating === "number" ? book.source_rating : null,
+    description: typeof description === "string" ? description : null,
     savedAt: new Date().toISOString(),
   };
   await store.set(key, JSON.stringify(record));
