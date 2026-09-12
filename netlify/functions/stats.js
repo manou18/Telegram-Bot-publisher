@@ -1,4 +1,4 @@
-const { listPublished, getTotalViews } = require("../lib/publishLog");
+const { listPublished, getTotalViews, getTotalReactions, getTotalComments } = require("../lib/publishLog");
 const { listSaved } = require("../lib/savedBooks");
 const { requireAuth } = require("../lib/auth");
 const { listQueue, getQueueSettings } = require("../lib/publishQueue");
@@ -45,7 +45,15 @@ exports.handler = async (event) => {
     const recent = [...published]
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
       .slice(0, 8)
-      .map((b) => ({ title: b.title, author: b.author, rating: b.rating || null, publishedAt: b.publishedAt, views: getTotalViews(b) }));
+      .map((b) => ({
+        title: b.title,
+        author: b.author,
+        rating: b.rating || null,
+        publishedAt: b.publishedAt,
+        views: getTotalViews(b),
+        reactions: getTotalReactions(b),
+        comments: getTotalComments(b),
+      }));
 
     // Telegram view counts (see lib/telegramViews.js) — filled in gradually by the
     // refresh-views cron job, not at publish time, so a freshly-published book will show
@@ -58,6 +66,27 @@ exports.handler = async (event) => {
       .filter((b) => b.views > 0)
       .sort((a, b) => b.views - a.views)
       .slice(0, 8);
+
+    // Reactions and comments arrive live via the Telegram webhook (see
+    // telegram-webhook.js) rather than a periodic cron — so unlike views, these can be
+    // 0 forever for a book with genuinely no reactions/comments, not just "not checked
+    // yet". Only books published to a channel with reactions enabled (and, for
+    // comments, a linked discussion group the bot has joined) will ever have nonzero
+    // values here — see the README's "Reactions & Comments" section.
+    const totalReactions = published.reduce((sum, b) => sum + getTotalReactions(b), 0);
+    const totalComments = published.reduce((sum, b) => sum + getTotalComments(b), 0);
+    const topReacted = [...published]
+      .map((b) => ({ title: b.title, author: b.author, reactions: getTotalReactions(b), comments: getTotalComments(b) }))
+      .filter((b) => b.reactions > 0 || b.comments > 0)
+      .sort((a, b) => b.reactions + b.comments - (a.reactions + a.comments))
+      .slice(0, 8);
+
+    // Filled in gradually by the check-dead-links cron job (see functions/check-dead-
+    // links.js) — a book only ever appears here after two consecutive failed link
+    // checks, never after just one, so this isn't just "the link was slow once".
+    const deadLinks = published
+      .filter((b) => b.linkStatus === "dead")
+      .map((b) => ({ title: b.title, author: b.author, source: b.source, download_url: b.download_url }));
 
     // Publish Queue summary — previously invisible from this panel, so a stalled or
     // paused drip-feed queue (or one quietly piling up with "stuck" items, see
@@ -84,6 +113,10 @@ exports.handler = async (event) => {
         recent,
         totalViews,
         topViewed,
+        totalReactions,
+        totalComments,
+        topReacted,
+        deadLinks,
         queue,
       }),
     };

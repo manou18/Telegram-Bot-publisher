@@ -1,8 +1,5 @@
-const { listPublished } = require("../lib/publishLog");
-const { listSaved } = require("../lib/savedBooks");
-const { listScheduled } = require("../lib/scheduledBooks");
-const { listQueue, getQueueSettings } = require("../lib/publishQueue");
 const { requireAuth } = require("../lib/auth");
+const { buildBackup } = require("../lib/backupData");
 
 exports.handler = async (event) => {
   try {
@@ -13,23 +10,7 @@ exports.handler = async (event) => {
       return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
 
-    const [published, saved, scheduled, queue, queueSettings] = await Promise.all([
-      listPublished(event),
-      listSaved(event),
-      listScheduled(event),
-      listQueue(event),
-      getQueueSettings(event),
-    ]);
-
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      counts: { published: published.length, saved: saved.length, scheduled: scheduled.length, queue: queue.length },
-      published,
-      saved,
-      scheduled,
-      queue,
-      queueSettings,
-    };
+    const backup = await buildBackup(event);
 
     const stamp = new Date().toISOString().slice(0, 10);
     return {

@@ -11,7 +11,7 @@
 // GET /api/feed?format=atom -> Atom 1.0
 // GET /api/feed?limit=20    -> cap the number of items (default 50, max 200)
 
-const { listPublished, getTotalViews } = require("../lib/publishLog");
+const { listPublished, getTotalViews, getTotalReactions, getTotalComments } = require("../lib/publishLog");
 
 const FEED_TITLE = process.env.FEED_TITLE || "Book Index — الكتب المنشورة";
 const FEED_DESCRIPTION = process.env.FEED_DESCRIPTION || "آخر الكتب التي تم نشرها عبر Book Index.";
@@ -47,8 +47,14 @@ function itemDescription(book) {
   // the full description just goes straight in.
   const parts = [];
   if (book.author) parts.push(`بقلم: ${book.author}`);
+  const engagement = [];
   const views = getTotalViews(book);
-  if (views > 0) parts.push(`👁 ${views.toLocaleString("en")} مشاهدة`);
+  const reactions = getTotalReactions(book);
+  const comments = getTotalComments(book);
+  if (views > 0) engagement.push(`👁 ${views.toLocaleString("en")}`);
+  if (reactions > 0) engagement.push(`❤️ ${reactions.toLocaleString("en")}`);
+  if (comments > 0) engagement.push(`💬 ${comments.toLocaleString("en")}`);
+  if (engagement.length) parts.push(engagement.join(" · "));
   if (book.description) parts.push(book.description);
   return parts.join("\n\n");
 }

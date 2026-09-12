@@ -11,6 +11,7 @@
 
 const { listPostsNeedingViewsRefresh, updatePostViews } = require("../lib/publishLog");
 const { fetchPostViews, getProbeChatId } = require("../lib/telegramViews");
+const { indexPost } = require("../lib/postIndex");
 
 const BATCH_SIZE = 15;
 // Forwarding + deleting both count against Telegram's per-chat rate limit for the probe
@@ -37,6 +38,12 @@ exports.handler = async (event) => {
 
     for (const task of tasks) {
       try {
+        // Cheap and idempotent — also doubles as backfilling the post-index (see
+        // postIndex.js) for any post published before that index existed, so reactions
+        // and comments (see telegram-webhook.js) retroactively start working for it too
+        // once this cron tick reaches it.
+        await indexPost(event, task.chatId, task.messageId, task.key);
+
         const views = await fetchPostViews(task.chatId, task.messageId);
         if (views !== null) {
           await updatePostViews(event, task.key, task.chatId, task.messageId, views);
