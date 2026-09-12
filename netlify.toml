@@ -11,7 +11,20 @@
   to = "/.netlify/functions/:splat"
   status = 200
 
-# Runs every 5 minutes and publishes any "scheduled for later" book whose time has come.
-# Not called by the frontend — Netlify's own scheduler triggers this on its own.
+# Runs every 5 minutes and publishes any "scheduled for later" book whose time has come —
+# and, in the same run, also drains one book from the persistent publish queue if it's
+# enabled and its configured interval has elapsed (see lib/publishQueue.js). Not called by
+# the frontend — Netlify's own scheduler triggers this on its own.
 [functions."scheduled-publish"]
   schedule = "*/5 * * * *"
+
+# Runs every 10 minutes and refreshes Telegram view counts for a small batch of
+# previously-published posts (see lib/telegramViews.js + functions/refresh-views.js).
+# Not called by the frontend, and a no-op if no probe chat is configured.
+[functions."refresh-views"]
+  schedule = "*/10 * * * *"
+
+# Runs once a day and prunes old Netlify Blobs data (see cleanup.js for the retention
+# windows) so storage stays well inside the free tier over time. Not called by the frontend.
+[functions."cleanup"]
+  schedule = "0 3 * * *"
