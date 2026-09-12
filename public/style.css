@@ -122,6 +122,34 @@ select:focus, input:focus, textarea:focus, button:focus {
   outline-offset: 1px;
 }
 
+.mode-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mode-group {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  background: var(--paper-card-alt);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.mode-group:hover:not(.active) {
+  border-color: var(--accent-blue);
+  color: var(--ink);
+}
+.mode-group.active {
+  color: #241704;
+  background: linear-gradient(180deg, #e6b654, var(--green));
+  border-color: var(--green-dark);
+}
+
 .mode-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -129,6 +157,7 @@ select:focus, input:focus, textarea:focus, button:focus {
   margin-bottom: 18px;
   border-bottom: 1px solid var(--rule);
 }
+.mode-tabs.hidden { display: none; }
 .tab {
   font-family: var(--font-body);
   font-size: 0.95rem;
@@ -139,12 +168,49 @@ select:focus, input:focus, textarea:focus, button:focus {
   color: var(--ink-soft);
   cursor: pointer;
   margin-inline-end: 20px;
+  transition: color 0.15s ease, border-bottom-color 0.15s ease;
 }
+.tab:hover:not(.active) { color: var(--ink); }
 .tab.active {
   color: var(--ink);
   border-bottom-color: var(--green);
   font-weight: 600;
 }
+
+/* Header "More" menu — collapses Stats/Sources/Export/Import into one dropdown so the
+   header stays compact (especially on mobile) instead of a row of 4 separate buttons.
+   Items are styled as a single flat list (no per-row border/background) rather than
+   stacked buttons, so it reads as one menu instead of a box of separate pills. */
+.more-menu { position: relative; }
+.more-menu-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+  min-width: 200px;
+}
+.more-menu-panel.hidden { display: none; }
+.more-menu-panel .more-menu-item {
+  width: 100%;
+  text-align: start;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-weight: 500;
+}
+.more-menu-panel .more-menu-item:hover {
+  background: var(--paper-card-alt);
+  color: var(--accent-blue);
+}
+
 
 .search-row { display: flex; gap: 8px; }
 .search-row input { flex: 1; }
@@ -154,6 +220,25 @@ select:focus, input:focus, textarea:focus, button:focus {
   color: var(--ink-soft);
   margin: 8px 0 0;
 }
+
+.channel-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.channel-check-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--paper-card-alt);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.channel-check-item input[type="checkbox"] { accent-color: var(--green); }
+.channel-check-item:has(input:checked) { border-color: var(--green); color: var(--green); }
 
 .btn-primary, .btn-ghost {
   font-family: var(--font-body);
@@ -448,7 +533,8 @@ select:focus, input:focus, textarea:focus, button:focus {
 }
 .preview-saved-note.hidden { display: none; }
 
-#saveBtn.saved {
+#saveBtn.saved,
+#manualSaveBtn.saved {
   border-color: var(--stamp);
   color: var(--stamp);
 }
@@ -519,6 +605,18 @@ select:focus, input:focus, textarea:focus, button:focus {
 }
 .custom-cover-thumb.hidden { display: none; }
 .cover-url-row { margin: 8px 0 0; }
+
+.mockup-result-img {
+  display: block;
+  max-width: 320px;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  margin: 10px 0;
+}
+.mockup-result-img.hidden { display: none; }
+
+.copyright-divider { margin-top: 16px; text-align: center; }
 
 .copyright-check-field { margin: 0 0 16px; }
 .copyright-result {
@@ -675,6 +773,176 @@ select:focus, input:focus, textarea:focus, button:focus {
 .download-local-btn:hover { background: var(--stamp); color: #1b0f06; }
 .download-local-btn.hidden { display: none; }
 
+.preview-source-link {
+  display: inline-block;
+  margin: 0 0 16px;
+  text-decoration: none;
+  text-align: center;
+}
+.preview-source-link.hidden { display: none; }
+
+.mockup-covers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+.mockup-covers-list:empty { margin: 0; }
+.mockup-cover-thumb-item {
+  position: relative;
+  width: 64px;
+  height: 96px;
+}
+.mockup-cover-thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+}
+.mockup-cover-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--stamp);
+  color: #1b0f06;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Watermark-remover tool (Tools ▸ Remove Watermark) — reuses the site's card/gold
+   palette instead of the original slate/sky-blue mock so it reads as part of the
+   catalog rather than a pasted-in widget. */
+.wm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  margin: 4px 0 16px;
+}
+.wm-toggle-group { display: flex; gap: 8px; }
+.wm-toggle.active {
+  color: #241704;
+  background: linear-gradient(180deg, #e6b654, var(--green));
+  border-color: var(--green-dark);
+}
+.wm-toggle.active:hover { color: #241704; border-color: var(--green-dark); }
+.wm-field { margin-bottom: 0; min-width: 170px; }
+.wm-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--paper-card-alt);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.wm-slider-group input[type="range"] {
+  width: 90px;
+  accent-color: var(--green);
+}
+.wm-slider-value { color: var(--ink); font-weight: 600; min-width: 1.6em; }
+
+.wm-progress-wrap {
+  max-width: 520px;
+  margin: 4px 0 14px;
+  background: var(--paper-card-alt);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  height: 8px;
+  overflow: hidden;
+  display: none;
+}
+.wm-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--green-dark), var(--green));
+  transition: width 0.1s linear;
+}
+
+.wm-canvas-wrapper {
+  display: flex;
+  justify-content: center;
+  background: var(--paper-card-alt);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 14px;
+  overflow: auto;
+  max-height: 60vh;
+}
+#wmCanvas {
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #000;
+  cursor: crosshair;
+}
+#crCanvas {
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #000;
+  cursor: crosshair;
+}
+
+/* Telegram Preview tool (Tools ▸ Telegram Preview) — a small mock chat bubble so the
+   card reads as "a preview of an external app" while still sitting on the site's own
+   dark/gold palette rather than copying Telegram's actual colors. */
+.tg-char-count { margin: 0 0 10px; }
+.tg-char-count.tg-char-warn { color: var(--stamp); }
+.tg-bubble {
+  max-width: 420px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, var(--paper-card), #141c39);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(4, 8, 24, 0.35);
+}
+.tg-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.tg-bubble-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #e6b654, var(--green));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+.tg-bubble-channel-name { font-weight: 700; font-size: 0.95rem; color: var(--ink); }
+.tg-bubble-channel-sub { font-size: 0.75rem; color: var(--ink-soft); }
+.tg-bubble-image {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+}
+.tg-bubble-image.hidden { display: none; }
+.tg-bubble-caption {
+  padding: 12px 14px 16px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tg-bubble-caption b { color: var(--ink); }
+
 /* Schedule-for-later field in the preview card */
 .schedule-field {
   margin: 0 0 14px;
@@ -727,6 +995,7 @@ select:focus, input:focus, textarea:focus, button:focus {
   white-space: pre-line;
 }
 .bulk-status.hidden { display: none; }
+.queue-interval-input { width: 70px; }
 
 /* Checkbox added to each result row in bulk-select mode */
 .card-index li.bulk-row {
@@ -755,6 +1024,7 @@ select:focus, input:focus, textarea:focus, button:focus {
 }
 .scheduled-item.status-failed { border-inline-start-color: var(--stamp); }
 .scheduled-item.status-published { border-inline-start-color: var(--ink-soft); }
+.scheduled-item.status-stuck { border-inline-start-color: var(--stamp); }
 .scheduled-item-title { font-weight: 600; color: var(--ink); }
 .scheduled-item-meta {
   color: var(--ink-soft);
@@ -773,4 +1043,33 @@ select:focus, input:focus, textarea:focus, button:focus {
 }
 .scheduled-item-status.pending { color: var(--green); border-color: var(--green); }
 .scheduled-item-status.failed { color: var(--stamp); border-color: var(--stamp); }
+.scheduled-item-status.stuck { color: var(--stamp); border-color: var(--stamp); }
 .scheduled-item-actions { margin-top: 8px; }
+
+/* Publish Queue drag-and-drop reordering */
+.queue-item {
+  position: relative;
+  transition: background 0.15s ease;
+}
+.queue-item.dragging {
+  opacity: 0.5;
+  background: var(--paper-card-alt);
+}
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  float: inline-end;
+  width: 32px;
+  height: 32px;
+  margin-inline-start: 8px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none; /* let the handle own vertical drag gestures instead of the page scrolling */
+  user-select: none;
+}
+.drag-handle:active { cursor: grabbing; background: var(--paper-card-alt); }
+.queue-item.dragging .drag-handle { cursor: grabbing; }

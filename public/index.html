@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
+<link rel="alternate" type="application/rss+xml" title="Book Index — RSS Feed" href="/api/feed" />
+<link rel="alternate" type="application/atom+xml" title="Book Index — Atom Feed" href="/api/feed?format=atom" />
 </head>
 <body>
   <div id="loginOverlay" class="overlay">
@@ -37,10 +39,15 @@
         <p class="subhead">Browse, pick, and publish to the channel — no command line needed</p>
       </div>
       <div class="header-actions">
-        <button id="statsBtn" class="btn-ghost">📊 Stats</button>
-        <button id="healthBtn" class="btn-ghost">🩺 Sources</button>
-        <button id="exportBtn" class="btn-ghost">⬇️ Export Backup</button>
-        <button id="importBtn" class="btn-ghost">⬆️ Import Backup</button>
+        <div class="more-menu">
+          <button id="moreMenuBtn" class="btn-ghost" aria-haspopup="true" aria-expanded="false">⋮ More</button>
+          <div id="moreMenuPanel" class="more-menu-panel hidden">
+            <button id="statsBtn" class="btn-ghost more-menu-item">📊 Stats</button>
+            <button id="healthBtn" class="btn-ghost more-menu-item">🩺 Sources</button>
+            <button id="exportBtn" class="btn-ghost more-menu-item">⬇️ Export Backup</button>
+            <button id="importBtn" class="btn-ghost more-menu-item">⬆️ Import Backup</button>
+          </div>
+        </div>
         <input type="file" id="importFileInput" accept="application/json,.json" class="hidden" />
       </div>
     </header>
@@ -51,13 +58,36 @@
         <select id="sourceSelect"></select>
       </div>
 
-      <div class="mode-tabs" role="tablist">
+      <div class="field hidden" id="channelField">
+        <label>📡 Publish to</label>
+        <div id="channelChecklist" class="channel-checklist"></div>
+        <p class="field-hint">Applies to every Publish / Schedule / Queue action below until you change it.</p>
+      </div>
+
+      <div class="mode-groups" role="tablist">
+        <button class="mode-group active" data-group="browse-group" type="button">📚 Browse Sources</button>
+        <button class="mode-group" data-group="lists-group" type="button">📋 My Lists</button>
+        <button class="mode-group" data-group="tools-group" type="button">🛠️ Tools</button>
+      </div>
+
+      <div class="mode-tabs" data-group="browse-group" role="tablist">
         <button class="tab active" data-mode="browse" role="tab">Browse Categories</button>
         <button class="tab" data-mode="search" role="tab">Search by Name</button>
         <button class="tab" data-mode="collection" role="tab">Archive.org Collection</button>
+      </div>
+      <div class="mode-tabs hidden" data-group="lists-group" role="tablist">
         <button class="tab" data-mode="saved" role="tab">📌 Saved Books</button>
         <button class="tab" data-mode="scheduled" role="tab">🕒 Scheduled</button>
+        <button class="tab" data-mode="queue" role="tab">🔁 Publish Queue</button>
+      </div>
+      <div class="mode-tabs hidden" data-group="tools-group" role="tablist">
         <button class="tab" data-mode="manual" role="tab">➕ Add Manually</button>
+        <button class="tab" data-mode="mockup" role="tab">🖼️ Cover Mockup</button>
+        <button class="tab" data-mode="copyright" role="tab">🔍 Check Copyright</button>
+        <button class="tab" data-mode="watermark" role="tab">🩹 Remove Watermark</button>
+        <button class="tab" data-mode="compress" role="tab">🗜️ Compress Cover</button>
+        <button class="tab" data-mode="crop" role="tab">✂️ Crop Cover</button>
+        <button class="tab" data-mode="tgpreview" role="tab">📱 Telegram Preview</button>
       </div>
 
       <div class="field" id="categoryField">
@@ -99,11 +129,6 @@
       <div class="field">
         <label for="manualDescriptionInput">Description</label>
         <textarea id="manualDescriptionInput" rows="4" placeholder="A short description of the book…"></textarea>
-      </div>
-
-      <div class="copyright-check-field">
-        <button id="checkCopyrightBtn" class="btn-ghost" type="button">🔍 Check Copyright Status</button>
-        <div id="copyrightResult" class="copyright-result hidden"></div>
       </div>
 
       <div class="cover-choice-field">
@@ -155,8 +180,331 @@
       <div class="preview-actions">
         <button id="manualPublishBtn" class="btn-primary">Publish to Channel</button>
         <button id="manualPublishCoverOnlyBtn" class="btn-ghost hidden">Publish Cover Only</button>
+        <button id="manualSaveBtn" class="btn-ghost" type="button">💾 Save for Later</button>
       </div>
       <p id="manualPublishResult" class="publish-result"></p>
+    </section>
+
+    <section class="controls hidden" id="mockupField">
+      <p class="field-hint">Generate the 3D "book on a shelf" mockup image from any cover — a standalone tool, separate from publishing. Nothing here is sent to the channel.</p>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Cover image(s) — add up to 4 for a shelf collection</span>
+        <div id="mockupCoversList" class="mockup-covers-list"></div>
+        <div class="cover-upload-row">
+          <label for="mockupCoverFile" class="btn-ghost cover-upload-btn">⬆️ Add Cover Image</label>
+          <input type="file" id="mockupCoverFile" accept="image/*" multiple class="hidden-file-input" />
+        </div>
+        <div class="search-row cover-url-row">
+          <input type="url" id="mockupCoverUrlInput" placeholder="…or paste an image URL" />
+          <button id="mockupUseCoverUrlBtn" class="btn-ghost" type="button">Add URL</button>
+        </div>
+      </div>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🎬 Scene</span>
+        <select id="mockupSceneSelect">
+          <option value="shelf">📚 Bookshelf</option>
+          <option value="marble">🍦 Marble table</option>
+          <option value="reading">🪴 Reading corner</option>
+        </select>
+      </div>
+
+      <div class="preview-actions">
+        <button id="mockupGenerateBtn" class="btn-primary" disabled>🪄 Generate Mockup</button>
+      </div>
+      <p id="mockupResult" class="publish-result hidden"></p>
+
+      <div id="mockupOutputWrap" class="cover-choice-field hidden">
+        <span class="file-type-label">Result</span>
+        <img id="mockupResultImg" class="mockup-result-img hidden" alt="Generated mockup" />
+        <div class="preview-actions">
+          <a id="mockupDownloadBtn" class="btn-ghost hidden" download="cover-mockup.png">⬇️ Download Mockup</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls hidden" id="copyrightField">
+      <p class="field-hint">Check a book's copyright status against Project Gutenberg, Google Books, and Open Library — a standalone lookup, separate from adding or publishing a book.</p>
+
+      <div class="field">
+        <label for="copyrightTitleInput">Title *</label>
+        <input id="copyrightTitleInput" type="text" placeholder="Book title" />
+      </div>
+      <div class="field">
+        <label for="copyrightAuthorInput">Author</label>
+        <input id="copyrightAuthorInput" type="text" placeholder="Author name" />
+      </div>
+
+      <div class="copyright-check-field">
+        <button id="checkCopyrightBtn" class="btn-primary" type="button">🔍 Check Copyright Status</button>
+        <div id="copyrightResult" class="copyright-result hidden"></div>
+      </div>
+
+      <p class="field-hint copyright-divider">— or check by cover image instead —</p>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Book cover</span>
+        <div class="cover-upload-row">
+          <label for="copyrightCoverFile" class="btn-ghost cover-upload-btn">⬆️ Upload Cover Image</label>
+          <input type="file" id="copyrightCoverFile" accept="image/*" class="hidden-file-input" />
+          <img id="copyrightCoverPreview" class="custom-cover-thumb hidden" alt="Cover preview" />
+          <button id="copyrightRemoveCoverBtn" class="btn-ghost hidden" type="button">✕ Remove</button>
+        </div>
+        <div class="search-row cover-url-row">
+          <input type="url" id="copyrightCoverUrlInput" placeholder="…or paste an image URL" />
+          <button id="copyrightUseCoverUrlBtn" class="btn-ghost" type="button">Use URL</button>
+        </div>
+      </div>
+
+      <div class="copyright-check-field">
+        <button id="checkCopyrightByCoverBtn" class="btn-ghost" type="button" disabled>✨ Read Cover &amp; Check Copyright</button>
+        <p class="field-hint">Reads the title/author off the cover with Gemini, fills in the fields above, then runs the same check.</p>
+      </div>
+    </section>
+
+    <section class="controls hidden" id="watermarkField">
+      <p class="field-hint">Paint over or auto-target a corner watermark and blend it away — a standalone tool, runs entirely in your browser. Nothing here is uploaded or sent to the channel.</p>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Image</span>
+        <div class="cover-upload-row">
+          <label for="wmFileInput" class="btn-ghost cover-upload-btn">⬆️ Upload Image</label>
+          <input type="file" id="wmFileInput" accept="image/*" class="hidden-file-input" />
+        </div>
+      </div>
+
+      <div class="wm-toolbar">
+        <div class="wm-toggle-group">
+          <button id="wmModeAuto" class="btn-ghost wm-toggle active" type="button">Auto Mode</button>
+          <button id="wmModeManual" class="btn-ghost wm-toggle" type="button">Manual Mode</button>
+        </div>
+
+        <div class="field wm-field">
+          <label for="wmCornerSelect">Corner</label>
+          <select id="wmCornerSelect">
+            <option value="bottom-right">Bottom Right</option>
+            <option value="bottom-left">Bottom Left</option>
+            <option value="top-right">Top Right</option>
+            <option value="top-left">Top Left</option>
+          </select>
+        </div>
+
+        <div class="field wm-field">
+          <label for="wmFillStyleSelect">Fill Style</label>
+          <select id="wmFillStyleSelect">
+            <option value="texture" selected>Texture (photos, patterns)</option>
+            <option value="smooth">Smooth (flat backgrounds/logos)</option>
+          </select>
+        </div>
+
+        <div class="wm-slider-group">
+          <span>Brush</span>
+          <input type="range" id="wmBrushSize" min="10" max="70" value="28" />
+          <span id="wmBrushValue" class="wm-slider-value">28</span>
+        </div>
+
+        <div class="wm-slider-group">
+          <span>Quality</span>
+          <input type="range" id="wmQualitySlider" min="1" max="3" value="2" />
+          <span id="wmQualityValue" class="wm-slider-value">Medium</span>
+        </div>
+      </div>
+
+      <div class="preview-actions">
+        <button id="wmClearMaskBtn" class="btn-ghost" type="button" disabled>Clear Mask</button>
+        <button id="wmRemoveBtn" class="btn-primary" type="button" disabled>🩹 Remove Watermark</button>
+        <button id="wmUndoBtn" class="btn-ghost" type="button" disabled>↩️ Undo</button>
+        <button id="wmCompareBtn" class="btn-ghost" type="button" disabled>Hold: Compare</button>
+        <button id="wmDownloadBtn" class="btn-ghost" type="button" disabled>⬇️ Download</button>
+      </div>
+
+      <p id="wmStatus" class="publish-result">Upload an image to start</p>
+      <div id="wmProgressWrap" class="wm-progress-wrap"><div id="wmProgressBar" class="wm-progress-bar"></div></div>
+
+      <div class="wm-canvas-wrapper">
+        <canvas id="wmCanvas"></canvas>
+      </div>
+
+      <p class="field-hint">
+        <strong>Auto Mode:</strong> choose a corner, then click Remove Watermark.<br />
+        <strong>Manual Mode:</strong> paint over the watermark, then click Remove Watermark.<br />
+        <strong>Texture</strong> copies matching patches from elsewhere in the photo — best for busy/photographic backgrounds.
+        <strong>Smooth</strong> blends surrounding colors — best for flat backgrounds and simple logos.
+        Higher Quality searches more and iterates more, so it's slower but cleaner.
+      </p>
+    </section>
+
+    <section class="controls hidden" id="compressField">
+      <p class="field-hint">Shrink a cover's dimensions and file size before uploading it — a standalone tool, runs entirely in your browser. Nothing here is uploaded or sent to the channel.</p>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Cover image</span>
+        <div class="cover-upload-row">
+          <label for="ccFileInput" class="btn-ghost cover-upload-btn">⬆️ Upload Image</label>
+          <input type="file" id="ccFileInput" accept="image/*" class="hidden-file-input" />
+          <img id="ccOriginalPreview" class="custom-cover-thumb hidden" alt="Original preview" />
+          <span id="ccOriginalInfo" class="field-hint hidden"></span>
+        </div>
+      </div>
+
+      <div class="wm-toolbar">
+        <div class="field wm-field">
+          <label for="ccMaxWidthSelect">Max width</label>
+          <select id="ccMaxWidthSelect">
+            <option value="600">600 px</option>
+            <option value="800">800 px</option>
+            <option value="1000" selected>1000 px</option>
+            <option value="1400">1400 px</option>
+            <option value="0">Keep original size</option>
+          </select>
+        </div>
+
+        <div class="field wm-field">
+          <label for="ccFormatSelect">Output format</label>
+          <select id="ccFormatSelect">
+            <option value="image/jpeg" selected>JPEG</option>
+            <option value="image/webp">WEBP</option>
+            <option value="image/png">PNG</option>
+          </select>
+        </div>
+
+        <div class="wm-slider-group" id="ccQualityGroup">
+          <span>Quality</span>
+          <input type="range" id="ccQualitySlider" min="10" max="100" step="5" value="80" />
+          <span id="ccQualityValue" class="wm-slider-value">80%</span>
+        </div>
+      </div>
+
+      <div class="preview-actions">
+        <button id="ccCompressBtn" class="btn-primary" type="button" disabled>🗜️ Compress</button>
+        <button id="ccDownloadBtn" class="btn-ghost" type="button" disabled>⬇️ Download</button>
+      </div>
+
+      <p id="ccStatus" class="publish-result">Upload a cover to start</p>
+
+      <div id="ccResultWrap" class="cover-choice-field hidden">
+        <span class="file-type-label">Result</span>
+        <img id="ccResultPreview" class="mockup-result-img hidden" alt="Compressed preview" />
+        <p id="ccResultInfo" class="field-hint"></p>
+      </div>
+    </section>
+
+    <section class="controls hidden" id="cropField">
+      <p class="field-hint">Drag on the image to select the area to keep, then apply — a standalone tool, runs entirely in your browser. Nothing here is uploaded or sent to the channel.</p>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Cover image</span>
+        <div class="cover-upload-row">
+          <label for="crFileInput" class="btn-ghost cover-upload-btn">⬆️ Upload Image</label>
+          <input type="file" id="crFileInput" accept="image/*" class="hidden-file-input" />
+        </div>
+      </div>
+
+      <div class="wm-toolbar">
+        <div class="field wm-field">
+          <label for="crAspectSelect">Aspect ratio</label>
+          <select id="crAspectSelect">
+            <option value="0" selected>Free</option>
+            <option value="0.6667">2:3 (book cover)</option>
+            <option value="0.75">3:4</option>
+            <option value="1">1:1 (square)</option>
+            <option value="1.3333">4:3</option>
+            <option value="1.7778">16:9</option>
+          </select>
+        </div>
+
+        <div class="field wm-field">
+          <label for="crFormatSelect">Output format</label>
+          <select id="crFormatSelect">
+            <option value="image/jpeg" selected>JPEG</option>
+            <option value="image/webp">WEBP</option>
+            <option value="image/png">PNG</option>
+          </select>
+        </div>
+
+        <div class="wm-slider-group" id="crQualityGroup">
+          <span>Quality</span>
+          <input type="range" id="crQualitySlider" min="10" max="100" step="5" value="90" />
+          <span id="crQualityValue" class="wm-slider-value">90%</span>
+        </div>
+      </div>
+
+      <div class="preview-actions">
+        <button id="crResetBtn" class="btn-ghost" type="button" disabled>Reset Selection</button>
+        <button id="crApplyBtn" class="btn-primary" type="button" disabled>✂️ Apply Crop</button>
+        <button id="crDownloadBtn" class="btn-ghost" type="button" disabled>⬇️ Download</button>
+      </div>
+
+      <p id="crStatus" class="publish-result">Upload a cover to start</p>
+
+      <div class="wm-canvas-wrapper">
+        <canvas id="crCanvas"></canvas>
+      </div>
+
+      <div id="crResultWrap" class="cover-choice-field hidden">
+        <span class="file-type-label">Result</span>
+        <img id="crResultPreview" class="mockup-result-img hidden" alt="Cropped preview" />
+        <p id="crResultInfo" class="field-hint"></p>
+      </div>
+    </section>
+
+    <section class="controls hidden" id="tgPreviewField">
+      <p class="field-hint">See exactly how a post will render in the channel — same emoji, bold title, rating stars, and description truncation the publish step actually uses. A standalone previewer: nothing here is sent to the channel.</p>
+
+      <div class="field">
+        <label for="tgTitleInput">Title</label>
+        <input id="tgTitleInput" type="text" placeholder="Book title" />
+      </div>
+      <div class="field">
+        <label for="tgAuthorInput">Author</label>
+        <input id="tgAuthorInput" type="text" placeholder="Author name" />
+      </div>
+      <div class="field">
+        <label for="tgSourceInput">Source label</label>
+        <input id="tgSourceInput" type="text" placeholder="e.g. Manual, Project Gutenberg…" value="Manual" />
+      </div>
+      <div class="field">
+        <label for="tgRatingInput">Reader rating (leave blank to hide)</label>
+        <input id="tgRatingInput" type="number" min="0" max="5" step="0.1" placeholder="e.g. 4.3" />
+      </div>
+      <div class="field">
+        <label for="tgDescriptionInput">Description</label>
+        <textarea id="tgDescriptionInput" rows="4" placeholder="A short description of the book…"></textarea>
+      </div>
+
+      <div class="cover-choice-field">
+        <span class="file-type-label">🖼️ Cover (affects the description length limit)</span>
+        <div class="cover-upload-row">
+          <label for="tgCoverFile" class="btn-ghost cover-upload-btn">⬆️ Upload Cover Image</label>
+          <input type="file" id="tgCoverFile" accept="image/*" class="hidden-file-input" />
+          <img id="tgCoverPreview" class="custom-cover-thumb hidden" alt="Cover preview" />
+          <button id="tgRemoveCoverBtn" class="btn-ghost hidden" type="button">✕ Remove</button>
+        </div>
+        <div class="search-row cover-url-row">
+          <input type="url" id="tgCoverUrlInput" placeholder="…or paste an image URL" />
+          <button id="tgUseCoverUrlBtn" class="btn-ghost" type="button">Use URL</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="tgChannelNameInput">Channel name (preview header only)</label>
+        <input id="tgChannelNameInput" type="text" placeholder="e.g. Book Index" value="Book Index" />
+      </div>
+
+      <p class="field-hint tg-char-count">Caption length: <span id="tgCharCount">0 / 1024</span></p>
+
+      <div class="tg-bubble">
+        <div class="tg-bubble-header">
+          <span class="tg-bubble-avatar">📚</span>
+          <div>
+            <div id="tgBubbleChannelName" class="tg-bubble-channel-name">Book Index</div>
+            <div class="tg-bubble-channel-sub">channel</div>
+          </div>
+        </div>
+        <img id="tgBubbleImage" class="tg-bubble-image hidden" alt="Cover preview" />
+        <div id="tgBubbleCaption" class="tg-bubble-caption"></div>
+      </div>
     </section>
 
     <section class="results-wrap" id="resultsWrap">
@@ -189,6 +537,26 @@
         <button id="bulkPublishBtn" class="btn-primary" disabled>📮 Publish Selected</button>
         <input type="datetime-local" id="bulkScheduleDateTime" />
         <button id="bulkScheduleBtn" class="btn-ghost" disabled>🕒 Schedule Selected</button>
+        <button id="bulkQueueBtn" class="btn-ghost" disabled>🔁 Add Selected to Queue</button>
+        <label class="bulk-select-all">
+          <input type="checkbox" id="bulkQueueForce" />
+          Include already published/scheduled/queued/possibly copyrighted
+        </label>
+      </div>
+      <div id="queueSettingsBar" class="bulk-bar hidden">
+        <label class="bulk-select-all">
+          <input type="checkbox" id="queueEnabledToggle" />
+          Auto-publish from queue
+        </label>
+        <span>Every</span>
+        <input type="number" id="queueIntervalValue" min="1" step="1" class="queue-interval-input" />
+        <select id="queueIntervalUnit">
+          <option value="minutes">minutes</option>
+          <option value="hours" selected>hours</option>
+          <option value="days">days</option>
+        </select>
+        <button id="queueSaveSettingsBtn" class="btn-primary">💾 Save</button>
+        <span id="queueSettingsStatus" class="bulk-count"></span>
       </div>
       <p id="bulkPublishStatus" class="bulk-status hidden"></p>
       <ol id="resultsList" class="card-index"></ol>
@@ -219,6 +587,7 @@
             <div id="previewDescriptionResult" class="copyright-result hidden"></div>
           </div>
           <p id="previewFileState" class="preview-file-state"></p>
+          <a id="previewSourceLink" class="btn-ghost preview-source-link hidden" target="_blank" rel="noopener">🔗 View on the source's page</a>
           <p id="previewFileSize" class="preview-file-size hidden"></p>
           <p id="previewFileSizeWarning" class="preview-size-warning hidden"></p>
           <a id="downloadLocalBtn" class="btn-ghost download-local-btn hidden" rel="noopener">⬇️ Download File Locally</a>
@@ -341,6 +710,19 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="js/01-dom-state.js"></script>
+  <script src="js/02-api-utils.js"></script>
+  <script src="js/03-browse-search.js"></script>
+  <script src="js/04-preview-publish.js"></script>
+  <script src="js/05-copyright-mockup.js"></script>
+  <script src="js/06-manual-save.js"></script>
+  <script src="js/07-stats-health-auth.js"></script>
+  <script src="js/08-nav-ui.js"></script>
+  <script src="js/09-watermark.js"></script>
+  <script src="js/10-compress.js"></script>
+  <script src="js/11-crop.js"></script>
+  <script src="js/12-tg-preview.js"></script>
+  <script src="js/13-queue.js"></script>
+
 </body>
 </html>
