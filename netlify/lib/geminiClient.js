@@ -7,7 +7,7 @@
 // being deprecated-with-a-warning). gemini-3.5-flash-lite is the current cheapest/fastest
 // GA model and defaults to minimal "thinking" — plenty for this app's structured
 // extraction/description-rewrite tasks, which don't need heavy reasoning. Override via the
-// GEMINI_MODEL env var (e.g. to gemini-3.6-flash) if a specific deployment wants more.
+// GEMINI_MODEL env var if a specific deployment wants a different model.
 const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_TIMEOUT_MS = 25000; // Netlify functions have their own hard timeout; fail before that
 
