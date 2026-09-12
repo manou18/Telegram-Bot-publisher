@@ -46,6 +46,8 @@ async function fetchJson(url, attempt = 1) {
     const hint =
       r.status === 403
         ? " The source's protection (Cloudflare) appears to have rejected the request — it may be a temporary block, so try again shortly or use another source for now."
+        : r.status === 429
+        ? " The source is rate-limiting requests — this is expected for Google Books specifically without an API key (its keyless quota is shared by every anonymous caller on the internet, not just this app); setting GOOGLE_BOOKS_API_KEY fixes it (see README). Otherwise, try again shortly or use another source for now."
         : " Try again later or try the other source.";
     throw new Error(`Could not fetch data from the external source (status ${r.status}).${hint}`);
   }
@@ -251,27 +253,64 @@ function openlibrarySourceRating(doc) {
   return openlibraryExtractRating(doc).rating;
 }
 
+// Open Library's search doc can list more than one archive.org scan under "ia" (different
+// print editions of the same work). We used to only ever check ia[0] — if that particular
+// copy turned out to be borrow-only/restricted, the whole book showed with no download
+// link even when a second or third scan on the list was perfectly downloadable. This tries
+// each one in order and stops at the first with an actual file, so a restricted first copy
+// no longer hides a usable one further down the list. Capped at 5 to bound how many extra
+// archive.org requests one search result can trigger.
+const MAX_EDITIONS_TO_TRY = 5;
+
+async function findUsableArchiveCopy(iaIds, extensions) {
+  let lastInfo = null;
+  let lastIaId = null;
+  for (const iaId of iaIds.slice(0, MAX_EDITIONS_TO_TRY)) {
+    let info;
+    try {
+      info = await fetchArchiveInfo(iaId, extensions);
+    } catch (e) {
+      console.error(`Failed to check archive.org copy ${iaId}:`, e.message);
+      continue;
+    }
+    if (!lastInfo) {
+      lastInfo = info;
+      lastIaId = iaId;
+    }
+    if (extensions.some((ext) => info.files[ext])) {
+      return { iaId, info };
+    }
+  }
+  // Nothing had a direct file — still return the first copy we successfully looked up, so
+  // its cover/description can be used and the caller has an archive.org id to link to.
+  return lastInfo ? { iaId: lastIaId, info: lastInfo } : null;
+}
+
 async function openlibraryBuildBook(doc) {
   const title = doc.title;
   let author;
   if (doc.authors) author = (doc.authors || []).map((a) => a.name || "").join(", ") || "Unknown";
   else author = (doc.author_name || []).join(", ") || "Unknown";
 
-  let iaId = null;
-  if (Array.isArray(doc.ia) && doc.ia.length) iaId = doc.ia[0];
-  else if (typeof doc.ia === "string") iaId = doc.ia;
+  let iaIds = [];
+  if (Array.isArray(doc.ia)) iaIds = doc.ia.filter(Boolean);
+  else if (typeof doc.ia === "string" && doc.ia) iaIds = [doc.ia];
 
   let downloadUrlPdf = null;
   let downloadUrlEpub = null;
   let coverUrl = null;
   let description = null;
+  let usedIaId = null;
 
-  if (iaId) {
-    const info = await fetchArchiveInfo(iaId, [".pdf", ".epub"]);
-    downloadUrlPdf = info.files[".pdf"];
-    downloadUrlEpub = info.files[".epub"];
-    coverUrl = `https://archive.org/services/img/${iaId}`;
-    description = info.description;
+  if (iaIds.length) {
+    const found = await findUsableArchiveCopy(iaIds, [".pdf", ".epub"]);
+    if (found) {
+      usedIaId = found.iaId;
+      downloadUrlPdf = found.info.files[".pdf"];
+      downloadUrlEpub = found.info.files[".epub"];
+      coverUrl = `https://archive.org/services/img/${found.iaId}`;
+      description = found.info.description;
+    }
   } else if (doc.cover_i) {
     coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
   }
@@ -297,6 +336,16 @@ async function openlibraryBuildBook(doc) {
     source: "Open Library / Internet Archive",
     source_rating: sourceRating,
     source_rating_count: sourceRatingCount,
+    // Fallback link for when none of the scanned copies had a downloadable file: the
+    // archive.org item page if we found one at all, otherwise the Open Library work page —
+    // either way the user has somewhere to click instead of a dead end.
+    source_url: !(downloadUrlPdf || downloadUrlEpub)
+      ? usedIaId
+        ? `https://archive.org/details/${usedIaId}`
+        : doc.key
+        ? `https://openlibrary.org${doc.key}`
+        : null
+      : null,
   };
 }
 
@@ -378,6 +427,10 @@ async function archiveEduBuildBook(doc) {
     download_url_epub: downloadUrlEpub,
     description: info.description,
     source: "Internet Archive — Education & Teaching",
+    // Fallback for when the item turned out to be borrow-only/restricted (no direct
+    // file above) — at least send the user to the item's own archive.org page instead
+    // of leaving them with nothing to click.
+    source_url: iaId ? `https://archive.org/details/${iaId}` : null,
   };
 }
 
@@ -445,19 +498,37 @@ function oapenExtractUuid(entity) {
 // does NOT return that publisher's books — it returns the publisher's own entity record,
 // which carries a repeated "oapen.relation.isPublisherOf" field listing every book it's
 // ever published, with no details attached. For a large publisher (e.g. Springer Nature,
-// with thousands of titles) that entity record can be big enough that the response gets cut
-// off mid-transfer, which is exactly what caused the "Unexpected end of JSON input" error.
-// The documented, correct approach is two steps: resolve the publisher's UUID from its name
-// first, then list its actual publications via the oapen.relation.isPublishedBy field.
+// with thousands of titles) that field alone can be big enough that the response gets cut
+// off mid-transfer — this is exactly what caused the "Unexpected end of JSON input" error
+// when browsing Springer Nature specifically (smaller publishers didn't trip it).
+//
+// The fix: a DSpace 5 item/community record already carries its own "uuid" as a plain
+// top-level field — we don't need `expand=metadata` at all to read it, and that parameter
+// is precisely what pulls in the giant isPublisherOf list in the first place. So the normal
+// path here never requests metadata. Only if a candidate result is missing a top-level uuid
+// (some unexpected record shape) do we fall back to a single metadata-expanded re-fetch for
+// that one entity, keeping the same safety net as before without paying its cost every time.
 async function oapenResolvePublisherUuid(event, publisherName) {
   const url = `${OAPEN_BASE}/rest/search?query=${encodeURIComponent(
     `publisher.name:"${publisherName}"`
-  )}&expand=metadata&limit=5&offset=0`;
+  )}&limit=5&offset=0`;
   const data = await cachedFetchJson(event, url, fetchJson);
   const results = Array.isArray(data) ? data : [];
   for (const entity of results) {
     const uuid = oapenExtractUuid(entity);
     if (uuid) return uuid;
+    // Fallback for the rare record with no top-level uuid: re-fetch just this one entity
+    // with metadata expanded, so a genuinely large publisher isn't punished for a shape
+    // quirk on some other unrelated result.
+    if (entity && entity.link) {
+      try {
+        const expanded = await fetchJson(`${OAPEN_BASE}${entity.link}?expand=metadata`);
+        const fallbackUuid = oapenExtractUuid(expanded);
+        if (fallbackUuid) return fallbackUuid;
+      } catch (e) {
+        console.error(`Failed to resolve UUID via metadata fallback for ${publisherName}:`, e.message);
+      }
+    }
   }
   return null;
 }
@@ -521,6 +592,10 @@ async function oapenBuildBook(item) {
     download_url_epub: null,
     description,
     source: "OAPEN — Open-Access Academic Books",
+    // Fallback for records where OAPEN only indexes the metadata and the real file lives
+    // on the publisher's own site (see oapenHasDirectFile above) — send the user to the
+    // record's own OAPEN page instead of leaving them with nothing to click.
+    source_url: !downloadUrlPdf && item.handle ? `${OAPEN_BASE}/handle/${item.handle}` : null,
   };
 }
 
@@ -546,9 +621,16 @@ const GOOGLE_BOOKS_CATEGORIES = {
 
 async function googleBooksSearch(event, query, pageToken) {
   const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+  // Keyless requests to Google Books are metered against ONE shared quota bucket used by
+  // every anonymous caller on the internet (not per-IP) — it's usually already exhausted,
+  // which is why this source tends to fail with a 429 regardless of how lightly *we* use
+  // it. Setting GOOGLE_BOOKS_API_KEY (see README) moves requests onto your own free-tier
+  // quota instead; without it, we still work, just subject to that shared limit.
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY;
   const url =
     `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}` +
-    `&filter=full&maxResults=10&startIndex=${startIndex}`;
+    `&filter=full&maxResults=10&startIndex=${startIndex}` +
+    (apiKey ? `&key=${encodeURIComponent(apiKey)}` : "");
   const data = await cachedFetchJson(event, url, fetchJson);
   const results = data.items || [];
   const total = data.totalItems || 0;

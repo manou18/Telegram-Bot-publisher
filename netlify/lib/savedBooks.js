@@ -37,7 +37,12 @@ async function checkSaved(event, sourceId, item) {
 // user-edited or AI-rewritten description from the preview screen, kept alongside the
 // snapshot so it survives the trip through "Saved" and is used instead of the raw source
 // description when this book is eventually published (see preview.js and publish.js).
-async function saveBook(event, sourceId, item, book, rating, category, description) {
+// `customCoverUrl` is the same idea for a manually-uploaded/pasted cover (data: URI or
+// URL) chosen on the preview screen — without storing it here, "save for later" used to
+// silently drop the custom cover and fall back to the source's own cover_url once
+// re-opened or bulk-published, exactly like the description bug this comment already
+// describes.
+async function saveBook(event, sourceId, item, book, rating, category, description, customCoverUrl) {
   const store = getSavedStore(event);
   const key = keyFor(sourceId, item);
   const record = {
@@ -46,7 +51,8 @@ async function saveBook(event, sourceId, item, book, rating, category, descripti
     item,
     title: book.title,
     author: book.author,
-    cover_url: book.cover_url || null,
+    cover_url: customCoverUrl || book.cover_url || null,
+    cover_is_custom: !!customCoverUrl,
     source: book.source,
     category: category || null,
     rating: rating || null,

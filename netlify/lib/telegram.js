@@ -5,18 +5,19 @@
 // limit in Netlify's settings when publishing large books (see the limits note in the README).
 
 const { buildCoverMockup } = require("./coverMockup");
+const { resolveChatIds } = require("./channels");
+const { createDescriptionPage } = require("./telegraph");
 
-function getCreds() {
+function getBotToken() {
   const BOT_TOKEN = process.env.BOT_TOKEN;
-  const CHANNEL_ID = process.env.CHANNEL_ID;
-  if (!BOT_TOKEN || !CHANNEL_ID) {
-    throw new Error("BOT_TOKEN or CHANNEL_ID are not set as environment variables in Netlify.");
+  if (!BOT_TOKEN) {
+    throw new Error("BOT_TOKEN is not set as an environment variable in Netlify.");
   }
-  return { BOT_TOKEN, CHANNEL_ID };
+  return BOT_TOKEN;
 }
 
 async function telegramPost(method, payload) {
-  const { BOT_TOKEN } = getCreds();
+  const BOT_TOKEN = getBotToken();
   const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -28,7 +29,7 @@ async function telegramPost(method, payload) {
 }
 
 async function sendPhotoBuffer(chatId, buffer, caption) {
-  const { BOT_TOKEN } = getCreds();
+  const BOT_TOKEN = getBotToken();
   const form = new FormData();
   form.append("chat_id", chatId);
   form.append("caption", caption);
@@ -53,6 +54,40 @@ function truncate(text, max) {
   return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}…` : trimmed;
 }
 
+// Room left, within maxDescLen, for the "🔗 <a>...</a>" link line itself once a
+// description is long enough to need one — otherwise the teaser + link together could
+// still overflow the same limit we're trying to respect.
+const TELEGRAPH_LINK_MARGIN = 150;
+
+// Builds the "📝 ..." description block for the caption. A description that fits within
+// maxDescLen is shown in full, exactly as before. A longer one used to just get cut off
+// mid-sentence with an ellipsis — instead, we publish the full text to a Telegra.ph page
+// (see telegraph.js) and show a short teaser plus a link to the rest, so nothing the
+// source (or an AI rewrite) wrote is ever actually lost, regardless of length.
+async function buildDescriptionPart(book, maxDescLen) {
+  if (!book.description) return "";
+  const trimmed = String(book.description).trim();
+  if (!trimmed) return "";
+
+  if (trimmed.length <= maxDescLen) {
+    return `\n\n📝 ${escapeHtml(trimmed)}`;
+  }
+
+  let pageUrl = null;
+  try {
+    pageUrl = await createDescriptionPage(book);
+  } catch (e) {
+    console.warn(`Failed to create a Telegra.ph page for the description (${e.message}), falling back to truncating it.`);
+  }
+
+  if (!pageUrl) {
+    return `\n\n📝 ${escapeHtml(truncate(trimmed, maxDescLen))}`;
+  }
+
+  const teaser = truncate(trimmed, Math.max(maxDescLen - TELEGRAPH_LINK_MARGIN, 100));
+  return `\n\n📝 ${escapeHtml(teaser)}\n\n🔗 <a href="${pageUrl}">الوصف الكامل على Telegraph</a>`;
+}
+
 // Book covers are usually tall/portrait (~2:3), which makes Telegram's channel feed apply a
 // center-crop that cuts off the top and bottom of the image (title/author get chopped off).
 // The linked discussion group doesn't do this — it shows the photo uncropped. To make the
@@ -63,14 +98,11 @@ function paddedCoverUrl(coverUrl) {
   return `https://wsrv.nl/?url=${encoded}&w=1000&h=1000&fit=contain&bg=ffffff`;
 }
 
-async function sendCoverAndCaption(book) {
-  const { CHANNEL_ID } = getCreds();
+async function sendCoverAndCaption(book, chatId) {
   // Telegram's photo caption limit is 1024 characters, while a text message allows 4096,
   // so we give the description more room when there's no cover being sent as a photo.
   const maxDescLen = book.cover_url ? 500 : 1500;
-  const descriptionPart = book.description
-    ? `\n\n📝 ${escapeHtml(truncate(book.description, maxDescLen))}`
-    : "";
+  const descriptionPart = await buildDescriptionPart(book, maxDescLen);
   // book.rating now comes straight from the source's real reader rating (Open Library /
   // Google Books) when one exists, so it can be a decimal like 4.3 rather than a whole
   // number — round for the star count, but keep the decimal in the printed "x/5".
@@ -80,20 +112,25 @@ async function sendCoverAndCaption(book) {
     ratingPart = `\n${"⭐".repeat(Math.round(book.rating))} (${display}/5 — reader rating)`;
   }
   const caption = `📚 <b>${escapeHtml(book.title)}</b>\n✍️ ${escapeHtml(book.author)}\n📖 ${escapeHtml(book.source)}${ratingPart}${descriptionPart}`;
+  // The message id of this cover/caption post (returned below) is what view counts get
+  // tracked against later (see lib/telegramViews.js + refresh-views.js) — it's the one
+  // message per channel that actually represents "this book's listing", whether or not a
+  // separate file document also gets sent after it.
+  let sendResult;
   if (book.cover_url) {
     try {
       const mockupBuffer = await buildCoverMockup(book.cover_url);
-      await sendPhotoBuffer(CHANNEL_ID, mockupBuffer, caption);
+      sendResult = await sendPhotoBuffer(chatId, mockupBuffer, caption);
     } catch (mockupError) {
       console.warn(`Failed to build the 3D cover mockup (${mockupError.message}), falling back to the plain cover.`);
       if (book.cover_url.startsWith("data:")) {
         // A manually uploaded cover — can't be proxied through wsrv.nl (it needs a fetchable
         // URL), so send the decoded image bytes directly instead.
         const base64 = book.cover_url.split(",")[1] || "";
-        await sendPhotoBuffer(CHANNEL_ID, Buffer.from(base64, "base64"), caption);
+        sendResult = await sendPhotoBuffer(chatId, Buffer.from(base64, "base64"), caption);
       } else {
-        await telegramPost("sendPhoto", {
-          chat_id: CHANNEL_ID,
+        sendResult = await telegramPost("sendPhoto", {
+          chat_id: chatId,
           photo: paddedCoverUrl(book.cover_url),
           caption,
           parse_mode: "HTML",
@@ -101,8 +138,9 @@ async function sendCoverAndCaption(book) {
       }
     }
   } else {
-    await telegramPost("sendMessage", { chat_id: CHANNEL_ID, text: caption, parse_mode: "HTML" });
+    sendResult = await telegramPost("sendMessage", { chat_id: chatId, text: caption, parse_mode: "HTML" });
   }
+  return sendResult && sendResult.result ? sendResult.result.message_id : null;
 }
 
 // First tries passing the URL directly (fastest, and enough for most cases since Telegram
@@ -110,8 +148,8 @@ async function sendCoverAndCaption(book) {
 // bigger than the 20 MB limit allowed for the URL method, or the URL needs headers/redirects
 // Telegram doesn't support directly — it automatically falls back to downloading the file here
 // and then uploading it as an actual file (multipart), which supports up to 50 MB via direct upload.
-async function sendBookFile(book) {
-  const { BOT_TOKEN, CHANNEL_ID } = getCreds();
+async function sendBookFile(book, chatId) {
+  const BOT_TOKEN = getBotToken();
 
   if (book.download_url.startsWith("data:")) {
     // Manually uploaded file, small enough to have been embedded as base64 — decode and
@@ -126,7 +164,7 @@ async function sendBookFile(book) {
     }
     const ext = mime.includes("epub") ? ".epub" : ".pdf";
     const form = new FormData();
-    form.append("chat_id", CHANNEL_ID);
+    form.append("chat_id", chatId);
     form.append("document", new Blob([buffer], { type: mime }), `book${ext}`);
     const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
       method: "POST",
@@ -138,7 +176,7 @@ async function sendBookFile(book) {
   }
 
   try {
-    await telegramPost("sendDocument", { chat_id: CHANNEL_ID, document: book.download_url });
+    await telegramPost("sendDocument", { chat_id: chatId, document: book.download_url });
     return;
   } catch (urlError) {
     console.warn(`Failed to send the URL directly (${urlError.message}), downloading then uploading...`);
@@ -162,7 +200,7 @@ async function sendBookFile(book) {
   const filename = `book${ext}`;
 
   const form = new FormData();
-  form.append("chat_id", CHANNEL_ID);
+  form.append("chat_id", chatId);
   form.append("document", new Blob([arrayBuffer]), filename);
 
   const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
@@ -175,17 +213,80 @@ async function sendBookFile(book) {
   }
 }
 
-async function sendBook(book, publishCoverOnlyIfNoFile) {
+async function sendToOneChannel(book, publishCoverOnlyIfNoFile, chatId) {
   if (!book.download_url) {
     if (!publishCoverOnlyIfNoFile) {
       return { status: "skipped", message: "No downloadable file available, nothing was published." };
     }
-    await sendCoverAndCaption(book);
-    return { status: "cover_only", message: `Published cover and info only for: ${book.title}` };
+    const messageId = await sendCoverAndCaption(book, chatId);
+    return { status: "cover_only", message: `Published cover and info only for: ${book.title}`, messageId };
   }
-  await sendCoverAndCaption(book);
-  await sendBookFile(book);
-  return { status: "published", message: `Published: ${book.title}` };
+  const messageId = await sendCoverAndCaption(book, chatId);
+  await sendBookFile(book, chatId);
+  return { status: "published", message: `Published: ${book.title}`, messageId };
+}
+
+// channelIds: the channel *ids* the publisher picked in the UI (see lib/channels.js), not
+// raw Telegram chat ids — resolveChatIds() turns those into actual chat_id(s) to send to,
+// falling back through category → default → "every configured channel" when nothing was
+// explicitly picked (see channels.js for the full fallback chain). Publishes to every
+// resolved channel; if at least one succeeds this returns normally (with a per-channel
+// breakdown), and only throws when EVERY channel failed — so existing retry/"mark
+// failed" logic in the scheduler and publish queue behaves exactly as it did when there
+// was only ever one channel to fail on.
+async function sendBook(book, publishCoverOnlyIfNoFile, channelIds) {
+  const targets = resolveChatIds(channelIds, book.category);
+  if (!targets.length) {
+    throw new Error(
+      "No Telegram channel is configured — set CHANNEL_ID (or TELEGRAM_CHANNELS) as an environment variable in Netlify."
+    );
+  }
+
+  const perChannel = [];
+  for (const chatId of targets) {
+    try {
+      const result = await sendToOneChannel(book, publishCoverOnlyIfNoFile, chatId);
+      perChannel.push({ chatId, ...result });
+    } catch (e) {
+      console.error(`Failed to publish to channel ${chatId}:`, e.message);
+      perChannel.push({ chatId, status: "failed", error: e.message });
+    }
+  }
+
+  const succeeded = perChannel.filter((r) => r.status !== "failed");
+  const failed = perChannel.filter((r) => r.status === "failed");
+
+  if (!succeeded.length) {
+    const detail = failed.map((f) => `${f.chatId}: ${f.error}`).join(" | ");
+    throw new Error(targets.length > 1 ? `Failed on all ${targets.length} channels — ${detail}` : failed[0].error);
+  }
+
+  const status = succeeded.every((r) => r.status === "cover_only")
+    ? "cover_only"
+    : succeeded.every((r) => r.status === "skipped")
+    ? "skipped"
+    : "published";
+
+  let message;
+  if (targets.length === 1) {
+    message = succeeded[0].message;
+  } else if (failed.length) {
+    message = `Published to ${succeeded.length}/${targets.length} channel(s). Failed: ${failed
+      .map((f) => f.chatId)
+      .join(", ")}.`;
+  } else {
+    message = `Published to ${succeeded.length} channel(s).`;
+  }
+
+  // Every successfully-posted channel with a real messageId (i.e. not "skipped" — those
+  // have nothing to track) becomes a post to check view counts on later, via
+  // lib/telegramViews.js + the refresh-views cron job. publishLog.js stores this array
+  // alongside the book so /api/stats can add up views per book (and across channels).
+  const posts = succeeded
+    .filter((r) => r.messageId)
+    .map((r) => ({ chatId: r.chatId, messageId: r.messageId }));
+
+  return { status, message, channels: perChannel, posts };
 }
 
 module.exports = { sendBook };

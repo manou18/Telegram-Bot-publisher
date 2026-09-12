@@ -3,7 +3,12 @@
 // (the "rewrite description with AI" feature). Kept in one place so the API key handling,
 // timeout, and response-schema plumbing don't drift between the two.
 
-const DEFAULT_MODEL = "gemini-2.0-flash";
+// gemini-2.0-flash was fully retired by Google (calls now fail outright rather than just
+// being deprecated-with-a-warning). gemini-3.5-flash-lite is the current cheapest/fastest
+// GA model and defaults to minimal "thinking" — plenty for this app's structured
+// extraction/description-rewrite tasks, which don't need heavy reasoning. Override via the
+// GEMINI_MODEL env var (e.g. to gemini-3.6-flash) if a specific deployment wants more.
+const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_TIMEOUT_MS = 25000; // Netlify functions have their own hard timeout; fail before that
 
 function getApiKey() {

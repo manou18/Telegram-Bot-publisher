@@ -71,4 +71,35 @@ async function cachedFetchJson(event, url, fetcher) {
   }
 }
 
-module.exports = { cachedFetchJson };
+// http-cache entries are only ever useful within STALE_MAX_MS (a few hours) — anything
+// older than that is dead weight that a plain store.set() never reclaims on its own,
+// since every distinct search/browse URL ever requested gets its own permanent key
+// otherwise. Run this periodically to actually free that space; a much shorter window
+// than the one-year history retention used elsewhere, since nothing in this store is
+// meant to live more than a few hours in the first place. Returns how many were removed.
+const CACHE_CLEANUP_AGE_MS = 24 * 60 * 60 * 1000; // a day of headroom past STALE_MAX_MS
+
+async function cleanupOldCache(event, maxAgeMs = CACHE_CLEANUP_AGE_MS) {
+  const store = getCacheStore(event);
+  const { blobs } = await store.list();
+  const cutoff = Date.now() - maxAgeMs;
+  let removed = 0;
+  await Promise.all(
+    blobs.map(async ({ key }) => {
+      const raw = await store.get(key);
+      if (!raw) return;
+      try {
+        const cached = JSON.parse(raw);
+        if (cached.fetchedAt && cached.fetchedAt < cutoff) {
+          await store.delete(key);
+          removed++;
+        }
+      } catch {
+        // malformed entry — leave it, not this function's job to guess at it
+      }
+    })
+  );
+  return removed;
+}
+
+module.exports = { cachedFetchJson, cleanupOldCache };
