@@ -6,6 +6,7 @@
 const crypto = require("crypto");
 const { connectLambda, getStore } = require("@netlify/blobs");
 const { getStableId } = require("./bookIdentity");
+const { indexPost, lookupPostKey } = require("./postIndex");
 
 // Keyed on the stable per-source identity (see bookIdentity.js), not on the download URL —
 // the same book shouldn't be treated as "different" just because the user picked EPUB
@@ -32,8 +33,23 @@ async function checkPublished(event, sourceId, item) {
 
 async function recordPublished(event, sourceId, item, book, posts) {
   const store = getPublishStore(event);
+  const key = keyFor(sourceId, item);
+  const normalizedPosts = Array.isArray(posts)
+    ? posts.map((p) => ({
+        chatId: p.chatId,
+        messageId: p.messageId,
+        views: null,
+        viewsUpdatedAt: null,
+        // reactions/comments arrive via the Telegram webhook (see telegram-webhook.js),
+        // not fetched on a schedule like views — they start empty and get filled in
+        // whenever Telegram actually sends an update for this post.
+        reactions: {},
+        reactionsTotal: 0,
+        comments: 0,
+      }))
+    : [];
   await store.set(
-    keyFor(sourceId, item),
+    key,
     JSON.stringify({
       title: book.title,
       author: book.author,
@@ -49,19 +65,19 @@ async function recordPublished(event, sourceId, item, book, posts) {
       cover_url: book.cover_url || null,
       download_url: book.download_url || null,
       // One entry per channel this book was actually posted to (see sendBook() in
-      // telegram.js) — { chatId, messageId, views, viewsUpdatedAt }. views/viewsUpdatedAt
-      // start out empty and get filled in later by the refresh-views cron job, since
-      // Telegram doesn't hand over a view count at publish time (a post has 0 views the
-      // instant it's sent — see lib/telegramViews.js for how/why views are fetched
-      // separately, after the fact). Older records predating this feature simply have no
-      // `posts` array, which every reader here treats as "no views to show" rather than
-      // an error.
-      posts: Array.isArray(posts)
-        ? posts.map((p) => ({ chatId: p.chatId, messageId: p.messageId, views: null, viewsUpdatedAt: null }))
-        : [],
+      // telegram.js) — { chatId, messageId, views, viewsUpdatedAt, reactions,
+      // reactionsTotal, comments }. views/viewsUpdatedAt start out empty and get filled
+      // in later by the refresh-views cron job, since Telegram doesn't hand over a view
+      // count at publish time (a post has 0 views the instant it's sent — see
+      // lib/telegramViews.js for how/why views are fetched separately, after the fact).
+      posts: normalizedPosts,
       publishedAt: new Date().toISOString(),
     })
   );
+  // So an incoming reaction/comment webhook update — which only ever knows "this
+  // (chatId, messageId) changed", never which book that is — can find its way back to
+  // this record in O(1) instead of scanning every published book (see postIndex.js).
+  await Promise.all(normalizedPosts.map((p) => indexPost(event, p.chatId, p.messageId, key).catch(() => {})));
 }
 
 // Returns a Map of (the same hash keyFor() produces) -> rating, for every previously
@@ -226,6 +242,142 @@ async function listPostsNeedingViewsRefresh(event, limit) {
   return tasks.slice(0, limit);
 }
 
+// Every previously-published book that has a download_url, oldest-link-checked-or-never-
+// checked first, capped at `limit` — same batching idea as listPostsNeedingViewsRefresh
+// above, for the same reason (a single cron tick should only ever touch a small,
+// external-host-friendly batch). Books with no download_url (cover-only publishes) have
+// nothing to check and are left out entirely.
+async function listPublishedNeedingLinkCheck(event, limit) {
+  const records = await listPublished(event);
+  const tasks = records
+    .filter((r) => r.download_url)
+    .map((r) => ({
+      key: r.key,
+      title: r.title,
+      author: r.author,
+      source: r.source,
+      download_url: r.download_url,
+      linkCheckedAt: r.linkCheckedAt || null,
+    }));
+  tasks.sort((a, b) => new Date(a.linkCheckedAt || 0) - new Date(b.linkCheckedAt || 0));
+  return tasks.slice(0, limit);
+}
+
+// Called by the check-dead-links cron job after checking one book's download link (see
+// functions/check-dead-links.js). Requires two consecutive failed checks before actually
+// calling a link "dead" — a single failed check could just be a momentary blip on either
+// end, not an actually broken link, and repeated cron runs give it a fair second chance
+// before anyone gets alerted over it. Returns null if the book was somehow removed
+// between being listed and being checked.
+async function updateLinkCheckResult(event, key, ok) {
+  const store = getPublishStore(event);
+  const raw = await store.get(key);
+  if (!raw) return null;
+  let record;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const wasAlreadyDead = record.linkStatus === "dead";
+  if (ok) {
+    record.linkStatus = "ok";
+    record.linkFailCount = 0;
+  } else {
+    record.linkFailCount = (record.linkFailCount || 0) + 1;
+    record.linkStatus = record.linkFailCount >= 2 ? "dead" : record.linkStatus || "unknown";
+  }
+  record.linkCheckedAt = new Date().toISOString();
+  await store.set(key, JSON.stringify(record));
+  return { record, justWentDead: !wasAlreadyDead && record.linkStatus === "dead" };
+}
+// let `mutate` change the matching post entry in place, save it back.
+async function mutatePost(event, key, chatId, messageId, mutate) {
+  const store = getPublishStore(event);
+  const raw = await store.get(key);
+  if (!raw) return null;
+  let record;
+  try {
+    record = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(record.posts)) return null;
+  const post = record.posts.find((p) => p.chatId === chatId && p.messageId === messageId);
+  if (!post) return null;
+  mutate(post);
+  await store.set(key, JSON.stringify(record));
+  return record;
+}
+
+// Reaction "type" objects come in three shapes from Telegram: a plain emoji, a custom
+// (pack) emoji with no plain-text glyph, or a paid "Telegram Stars" reaction.
+function reactionLabel(type) {
+  if (!type) return "❓";
+  if (type.type === "emoji") return type.emoji;
+  if (type.type === "custom_emoji") return "🔷";
+  if (type.type === "paid") return "⭐";
+  return "❓";
+}
+
+// Called by the Telegram webhook (see telegram-webhook.js) whenever a channel post's
+// reaction counts change. Unlike views/comments, chatId+messageId here are exactly the
+// channel post's own — no forwarding or thread lookup needed, Telegram just tells us.
+async function updatePostReactions(event, chatId, messageId, reactions) {
+  const key = await lookupPostKey(event, chatId, messageId);
+  if (!key) return null; // predates the post-index (see postIndex.js) — nothing to update yet
+  return mutatePost(event, key, chatId, messageId, (post) => {
+    const map = {};
+    let total = 0;
+    (reactions || []).forEach((r) => {
+      const label = reactionLabel(r.type);
+      const count = typeof r.total_count === "number" ? r.total_count : 0;
+      map[label] = (map[label] || 0) + count;
+      total += count;
+    });
+    post.reactions = map;
+    post.reactionsTotal = total;
+    post.reactionsUpdatedAt = new Date().toISOString();
+  });
+}
+
+// Called by the Telegram webhook when a new comment shows up in a channel post's
+// discussion thread (see commentThreads.js for how that thread is matched back to the
+// channel post itself).
+async function incrementPostComments(event, chatId, messageId) {
+  const key = await lookupPostKey(event, chatId, messageId);
+  if (!key) return null;
+  return mutatePost(event, key, chatId, messageId, (post) => {
+    post.comments = (post.comments || 0) + 1;
+    post.commentsUpdatedAt = new Date().toISOString();
+  });
+}
+
+// Sum of reactions across every channel a book was posted to.
+function getTotalReactions(record) {
+  if (!record || !Array.isArray(record.posts)) return 0;
+  return record.posts.reduce((sum, p) => sum + (typeof p.reactionsTotal === "number" ? p.reactionsTotal : 0), 0);
+}
+
+// Per-emoji reaction counts combined across every channel a book was posted to — e.g.
+// { "❤️": 12, "👍": 4 } — for anywhere the stats UI wants to show more than just a total.
+function getReactionBreakdown(record) {
+  const combined = {};
+  if (!record || !Array.isArray(record.posts)) return combined;
+  record.posts.forEach((p) => {
+    Object.entries(p.reactions || {}).forEach(([emoji, count]) => {
+      combined[emoji] = (combined[emoji] || 0) + count;
+    });
+  });
+  return combined;
+}
+
+// Sum of comments across every channel a book was posted to.
+function getTotalComments(record) {
+  if (!record || !Array.isArray(record.posts)) return 0;
+  return record.posts.reduce((sum, p) => sum + (typeof p.comments === "number" ? p.comments : 0), 0);
+}
+
 module.exports = {
   checkPublished,
   recordPublished,
@@ -237,5 +389,12 @@ module.exports = {
   getTotalViews,
   updatePostViews,
   listPostsNeedingViewsRefresh,
+  listPublishedNeedingLinkCheck,
+  updateLinkCheckResult,
+  updatePostReactions,
+  incrementPostComments,
+  getTotalReactions,
+  getReactionBreakdown,
+  getTotalComments,
   keyForBook: keyFor,
 };

@@ -65,4 +65,25 @@ async function notifyPublishFailure({ kind, title, author, source, error, attemp
   await sendAdminMessage(lines.join("\n")).catch(() => false);
 }
 
-module.exports = { notifyPublishFailure };
+// Sent by the check-dead-links cron job the first time a book's download link fails two
+// consecutive checks in a row (see updateLinkCheckResult in publishLog.js) — not on
+// every recheck of an already-known-dead link, just the initial transition into "dead".
+async function notifyDeadLink({ title, author, source, download_url }) {
+  const lines = [
+    `🔗💀 <b>Dead download link detected</b>`,
+    `📖 ${escapeHtml(title || "Untitled")}${author ? ` — ${escapeHtml(author)}` : ""}`,
+  ];
+  if (source) lines.push(`📚 ${escapeHtml(source)}`);
+  lines.push(`❌ ${escapeHtml(download_url || "")}`);
+  await sendAdminMessage(lines.join("\n")).catch(() => false);
+}
+
+// Sent by the scheduled-backup cron job (see functions/scheduled-backup.js) whenever a
+// scheduled GitHub backup run fails outright — an expired token, a renamed/deleted repo,
+// a GitHub outage — so a silently-broken backup doesn't go unnoticed for months.
+async function notifyBackupFailure(error) {
+  const lines = [`🗄️❌ <b>Automated backup failed</b>`, `❗ ${escapeHtml(error || "Unknown error")}`];
+  await sendAdminMessage(lines.join("\n")).catch(() => false);
+}
+
+module.exports = { notifyPublishFailure, notifyDeadLink, notifyBackupFailure };
