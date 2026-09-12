@@ -24,7 +24,20 @@
 [functions."refresh-views"]
   schedule = "*/10 * * * *"
 
+# Runs every 6 hours and checks a batch of previously-published books' download links,
+# alerting via ADMIN_CHAT_ID (see lib/adminAlert.js) the first time one is confirmed dead
+# (see functions/check-dead-links.js for the "confirmed" logic — two consecutive failed
+# checks, not just one, to avoid false alarms from a transient network blip).
+[functions."check-dead-links"]
+  schedule = "0 */6 * * *"
+
+# Runs once a day and pushes the same data as the manual "Export Backup" button to a
+# GitHub repo (see lib/githubBackup.js + functions/scheduled-backup.js). No-op if
+# GITHUB_BACKUP_TOKEN/GITHUB_BACKUP_REPO aren't set.
+[functions."scheduled-backup"]
+  schedule = "0 3 * * *"
+
 # Runs once a day and prunes old Netlify Blobs data (see cleanup.js for the retention
 # windows) so storage stays well inside the free tier over time. Not called by the frontend.
 [functions."cleanup"]
-  schedule = "0 3 * * *"
+  schedule = "15 3 * * *"

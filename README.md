@@ -52,12 +52,19 @@ telegram-book-bot/
     │   ├── copyright-check.js← best-effort public-domain advisory check for manual entries
     │   ├── extract-book-info.js ← AI (Gemini) title/author/description extraction for manual entries
     │   ├── feed.js            ← public RSS/Atom feed of everything published (see "RSS/Atom Feed" below)
-    │   └── refresh-views.js   ← cron job that refreshes Telegram view counts (see "View counts" below)
+    │   ├── refresh-views.js   ← cron job that refreshes Telegram view counts (see "View counts" below)
+    │   ├── check-dead-links.js ← cron job that re-checks published download links (see "Dead link checking" below)
+    │   ├── telegram-webhook.js ← receives reactions/comments pushed live by Telegram (see "Reactions & Comments" below)
+    │   └── scheduled-backup.js ← cron job that pushes a daily backup to GitHub (see "Automated backups" below)
     └── lib/                   ← shared logic (book sources + sending to Telegram)
         ├── sources.js
         ├── telegram.js
         ├── telegraph.js       ← publishes long descriptions to Telegra.ph (see "Long Descriptions" below)
         ├── telegramViews.js   ← fetches a channel post's current view count (see "View counts" below)
+        ├── postIndex.js       ← (chatId, messageId) → publish-log key, so webhook updates can find their book
+        ├── commentThreads.js  ← maps a discussion-group comment thread back to its channel post
+        ├── backupData.js      ← builds the backup payload shared by export.js and scheduled-backup.js
+        ├── githubBackup.js    ← pushes the backup JSON to a GitHub repo via its Contents API
         ├── channels.js        ← parses TELEGRAM_CHANNELS (multi-channel publishing) with CHANNEL_ID fallback
         ├── adminAlert.js      ← sends a Telegram alert to ADMIN_CHAT_ID when a scheduled/queue publish fails unattended
         ├── bookIdentity.js    ← stable per-source dedupe key used by publishLog/savedBooks
@@ -110,6 +117,9 @@ From **Site settings → Environment variables → Add a variable** add:
 | `GOOGLE_BOOKS_API_KEY` | optional — fixes the Google Books source's frequent `429` errors. Keyless requests to Google Books share ONE quota bucket used by every anonymous caller on the internet (not per-IP), which is usually already exhausted — get a free key at [Google Cloud Console](https://console.cloud.google.com/apis/library/books.googleapis.com) (enable the "Books API", then Credentials → Create API key) to use your own quota instead |
 | `FEED_ENABLED` | optional — set to `false` to disable the public `/api/feed` RSS/Atom endpoint entirely (see "RSS/Atom Feed" below); left unset, the feed is on by default |
 | `FEED_TITLE` / `FEED_DESCRIPTION` | optional — override the title/description shown in the `/api/feed` RSS/Atom output; default to a generic "Book Index — الكتب المنشورة" |
+| `TELEGRAM_WEBHOOK_SECRET` | optional but strongly recommended once you set up the webhook for reactions/comments (see "Reactions & Comments" below) — a random string you choose, passed to `setWebhook` as `secret_token`; the webhook function rejects any request that doesn't echo it back in the `X-Telegram-Bot-Api-Secret-Token` header, since `/api/telegram-webhook` is public (Telegram can't send `X-Site-Password`) and this is what stops anyone else from posting fake updates to it. Leave unset only if you're not using the webhook at all — with it unset, the check is skipped entirely, which is fine for local testing but not recommended once deployed. |
+| `GITHUB_BACKUP_TOKEN` / `GITHUB_BACKUP_REPO` | optional — enable the daily automated backup to GitHub (see "Automated backups" below). `GITHUB_BACKUP_REPO` is `owner/repo-name`; `GITHUB_BACKUP_TOKEN` is a GitHub personal access token with write access to that repo's contents. Leave either unset and the scheduled backup silently skips itself — the manual "Export Backup" button keeps working regardless. |
+| `GITHUB_BACKUP_PATH` | optional — the file path within the repo the backup is written to. Defaults to `backups/book-index-backup.json`. |
 
 After saving, redeploy the site (Deploys → Trigger deploy) so the functions pick up the
 new variables.
@@ -379,6 +389,141 @@ long tail just takes longer to cycle through — raise `BATCH_SIZE` in `refresh-
 shorten the cron interval in `netlify.toml` if you'd rather trade a bit more API usage for
 fresher numbers. If a book was published to more than one channel (see
 `TELEGRAM_CHANNELS`), its views are the **sum** across every channel it went to.
+
+## Reactions & Comments
+
+The Stats dashboard also shows total reactions ❤️ and comments 💬, a "Most engagement"
+list, and per-book counts under "Recently published" — fed by a completely different
+mechanism than views above, since Telegram actually **pushes** these to us live instead
+of needing to be polled.
+
+**How it works:** `functions/telegram-webhook.js` is a public endpoint Telegram calls
+directly whenever something relevant happens, once you've told it to via `setWebhook`
+(one-time setup below):
+
+- **Reactions** come as a `message_reaction_count` update — Telegram hands over the
+  channel, the post's `message_id`, and the full up-to-date reaction breakdown directly,
+  no extra lookup needed.
+- **Comments** are trickier, because Telegram has no "comment count" field for a post at
+  all — a channel's comments are really just replies inside its **linked discussion
+  group**. Every channel post gets an automatic copy in that group, and every comment on
+  it is a reply threaded under that copy. `lib/commentThreads.js` remembers, the first
+  time it sees that automatic copy, which channel post it belongs to; every later message
+  in the same thread then counts as one more comment on that post.
+
+**One-time setup:**
+
+1. **Disable Privacy Mode** for your bot (message [@BotFather](https://t.me/BotFather) →
+   `/mybots` → your bot → **Bot Settings** → **Group Privacy** → **Turn off**). Without
+   this, the bot only sees messages that are commands or that mention it directly — it
+   needs to see *every* message in the discussion group to count comments. (Skip this
+   step if you only want reactions, not comments — reactions don't need it.)
+2. Make sure the bot is a **member** of the channel's linked discussion group (Channel
+   settings → Discussion → the group it's linked to). It doesn't need to be an admin
+   there, just present.
+3. Choose a random secret string and set it as `TELEGRAM_WEBHOOK_SECRET` in Netlify (see
+   the environment variables table above for why).
+4. Point Telegram at your deployed function (replace both placeholders):
+   ```
+   curl -F "url=https://<your-site>.netlify.app/api/telegram-webhook" \
+        -F "secret_token=<same value as TELEGRAM_WEBHOOK_SECRET>" \
+        -F "allowed_updates=[\"message\",\"message_reaction_count\"]" \
+        https://api.telegram.org/bot<BOT_TOKEN>/setWebhook
+   ```
+   A `{"ok":true,...}` response means it's live.
+
+**This replaces `getUpdates` for this bot.** A bot can only use one or the other — once a
+webhook is set, `getUpdates` (e.g. the trick used earlier to find your own chat id for
+`ADMIN_CHAT_ID`) will always return an empty list. If you ever need `getUpdates` again,
+run `https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook` first (comments/reactions
+tracking stops until you `setWebhook` again).
+
+**Limitations worth knowing:**
+
+- Only books published **after** the post-index existed can have reactions/comments
+  attributed to them at all — see `postIndex.js`. In practice this self-heals: every book
+  published from here on is indexed automatically, and `refresh-views.js` also
+  backfills the index for older posts as it cycles through them for views, so
+  reactions/comments retroactively start working for a given old post once that cron job
+  reaches it (see its comment).
+- Comments only count from the moment the bot joined the discussion group with Privacy
+  Mode off — older comments on old posts aren't retroactively counted, there's no API to
+  fetch message history.
+- Every single message sent in the discussion group triggers this webhook once — on a
+  busy discussion group this could mean a meaningful number of function invocations, worth
+  keeping in mind against Netlify's free-tier function-invocation limits.
+- Like views, this relies on Telegram's actual behavior rather than a documented,
+  guaranteed contract — if Telegram changes how it structures discussion-group threads,
+  comment counting could silently stop working (reactions are on firmer ground, since
+  `message_reaction_count` is an official, documented update type).
+
+## Dead link checking
+
+`functions/check-dead-links.js` runs every 6 hours (see `netlify.toml`) and re-checks a
+batch of previously-published books' download links (25 per run, oldest-checked-or-never-
+checked first — same batching approach as `refresh-views.js`, for the same reason: a
+single run should only ever touch a small, rate-limit-friendly batch instead of hammering
+every external host at once).
+
+**How a link is checked:** a `HEAD` request (falling back to a 1-byte ranged `GET` for
+hosts that don't support `HEAD`), with a 10-second timeout. Any response under 400 counts
+as "alive" — this is checking "does the URL still resolve to something", not "is it still
+exactly the right file".
+
+**Avoiding false alarms:** a link only gets marked `dead` — and only then triggers an
+alert — after **two consecutive** failed checks (roughly 6+ hours apart, given the
+schedule above), not after a single one. A one-off timeout or a host having a bad moment
+shouldn't page you; an actually-broken link showing the same failure twice in a row is a
+much stronger signal.
+
+**Where you see it:** the alert goes to `ADMIN_CHAT_ID` (same mechanism as
+`notifyPublishFailure` — see its section above), and every book currently flagged `dead`
+also shows up in a "⚠️ Dead links" section in the Stats dashboard, so you don't have to
+rely on catching the alert message itself. Nothing is ever auto-deleted or auto-removed
+from Telegram — this only tells you about a broken link, republishing or fixing the
+source is a manual call.
+
+## Automated backups (GitHub)
+
+The manual **⬇️ Export Backup** button (see "Exporting a backup" above) still works
+exactly as before — this adds a scheduled version of the same thing, so a recent backup
+exists somewhere outside Netlify Blobs even if nobody remembers to click the button.
+`functions/scheduled-backup.js` runs once a day and pushes the exact same data
+(`lib/backupData.js` — the same function the manual button itself now uses, so both are
+guaranteed to ship the same shape) to a file in a GitHub repo you choose.
+
+**Why GitHub over S3:** GitHub's Contents API is plain authenticated HTTP — no request-
+signing, no extra dependency, same `fetch()`-based approach as every Telegram call
+already in this app. S3 would need AWS's request-signing scheme (SigV4), which in
+practice means pulling in the full AWS SDK just for this one feature. GitHub is also free
+for a private repo; S3 has a (small, but nonzero) per-GB storage cost.
+
+**Why one file, not one-file-per-day:** the backup is written to the *same path* every
+run (default `backups/book-index-backup.json`). GitHub already keeps every previous
+version of a file in that file's own commit history — so you get a complete backup
+history "for free", browsable/restorable from any of GitHub's history/diff tools,
+without a repo that grows by one new file every single day forever.
+
+**One-time setup:**
+
+1. Create a **private** GitHub repo to hold backups (or reuse one you already have) —
+   private is important, since the backup can include direct file download links.
+2. Create a **personal access token** with write access to that repo only:
+   [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens)
+   → **Generate new token** (fine-grained) → under **Repository access**, select **Only
+   select repositories** and pick your backup repo → under **Permissions →
+   Repository permissions**, set **Contents** to **Read and write** → Generate.
+3. In Netlify, set:
+   - `GITHUB_BACKUP_TOKEN` — the token from step 2
+   - `GITHUB_BACKUP_REPO` — `your-username/your-backup-repo`
+4. Redeploy. The first run happens at the next scheduled time (03:00 UTC by default —
+   see `netlify.toml`); nothing needs to be triggered manually.
+
+**If it fails** (an expired/revoked token, a renamed or deleted repo, a GitHub outage),
+you get an alert on `ADMIN_CHAT_ID` — same mechanism as the other alerts in this app —
+so a silently-broken backup doesn't go unnoticed for months. Leave
+`GITHUB_BACKUP_TOKEN`/`GITHUB_BACKUP_REPO` unset and this whole feature is simply off; the
+manual Export button is entirely unaffected either way.
 
 ## Scheduling a book to publish later
 
