@@ -1,8 +1,9 @@
 const { SOURCES } = require("../lib/sources");
 const { sendBook } = require("../lib/telegram");
 const { checkPublished, recordPublished } = require("../lib/publishLog");
-const { unsaveBook } = require("../lib/savedBooks");
+const { checkSaved, unsaveBook } = require("../lib/savedBooks");
 const { requireAuth } = require("../lib/auth");
+const { buildManualBook, MANUAL_SOURCE_ID } = require("../lib/manualSource");
 
 exports.handler = async (event) => {
   try {
@@ -12,22 +13,52 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
-    const { source: sourceId, item, publishCoverOnlyIfNoFile, force, fileType, category, customCoverUrl, customDescription } =
+    const { source: sourceId, item, publishCoverOnlyIfNoFile, force, fileType, category, customCoverUrl, customDescription, channels } =
       JSON.parse(event.body || "{}");
-    const source = SOURCES[sourceId];
-    if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
 
-    const book = await source.buildBook(item);
+    let book;
+    if (sourceId === MANUAL_SOURCE_ID) {
+      if (!item || !item.title) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
+      book = buildManualBook(item);
+    } else {
+      const source = SOURCES[sourceId];
+      if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
+      book = await source.buildBook(item);
+    }
+
+    // Effective overrides: whatever this request explicitly sent takes priority (the
+    // single-book "Publish" button always sends the live edit state). If it sent neither,
+    // fall back to whatever was saved for this book — this is what makes bulk-publishing
+    // from the Saved tab (which only sends source/item/category, no edits) actually use
+    // the custom cover/description instead of silently reverting to the source's own.
+    let effectiveCoverUrl = customCoverUrl || null;
+    let effectiveDescription = typeof customDescription === "string" ? customDescription : undefined;
+    if (!effectiveCoverUrl || effectiveDescription === undefined) {
+      try {
+        const saved = await checkSaved(event, sourceId, item);
+        if (saved) {
+          if (!effectiveCoverUrl && saved.cover_is_custom && saved.cover_url) {
+            effectiveCoverUrl = saved.cover_url;
+          }
+          if (effectiveDescription === undefined && typeof saved.description === "string") {
+            effectiveDescription = saved.description;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to check the saved-books store:", e.message);
+      }
+    }
+
     // Manually supplied cover (uploaded file as a data: URI, or a pasted image URL) takes
     // priority over whatever the source fetched, when the user picked "Custom cover" in the UI.
-    if (customCoverUrl) {
-      book.cover_url = customCoverUrl;
+    if (effectiveCoverUrl) {
+      book.cover_url = effectiveCoverUrl;
     }
     // User-edited or AI-rewritten description from the preview screen takes priority over
     // whatever the source's raw metadata had — this is exactly the fix for long/inaccurate
     // source descriptions getting blindly chopped by telegram.js's truncate().
-    if (typeof customDescription === "string") {
-      book.description = customDescription.trim() || null;
+    if (typeof effectiveDescription === "string") {
+      book.description = effectiveDescription.trim() || null;
     }
     // No manual rating step: when the source itself provides a real reader rating (Open
     // Library / Google Books, when readers have actually rated that book there), use it.
@@ -69,10 +100,10 @@ exports.handler = async (event) => {
       }
     }
 
-    const result = await sendBook(book, !!publishCoverOnlyIfNoFile);
+    const result = await sendBook(book, !!publishCoverOnlyIfNoFile, channels);
 
     try {
-      await recordPublished(event, sourceId, item, book);
+      await recordPublished(event, sourceId, item, book, result.posts);
     } catch (e) {
       console.error("Failed to record the book in the publish log:", e.message);
     }

@@ -1,4 +1,5 @@
 const { requireAuth } = require("../lib/auth");
+const { listQueue, getQueueSettings } = require("../lib/publishQueue");
 
 // Cheap, source-specific "is it up right now" probes. Deliberately NOT the same request
 // path as Browse/Search (no http-cache, no retry-with-backoff) — the whole point here is
@@ -49,8 +50,24 @@ exports.handler = async (event) => {
     const authError = await requireAuth(event);
     if (authError) return authError;
 
-    const sources = await Promise.all(PROBES.map(probe));
+    const [sources, queueRecords, queueSettings] = await Promise.all([
+      Promise.all(PROBES.map(probe)),
+      listQueue(event),
+      getQueueSettings(event),
+    ]);
     const healthy = sources.filter((s) => s.ok).length;
+
+    // Publish Queue is its own kind of "health" signal — a drip-feed that's enabled but
+    // hasn't published anything in far longer than its own interval usually means it's
+    // silently stuck (see lib/publishQueue.js), and that was previously invisible from
+    // this panel.
+    const queue = {
+      total: queueRecords.length,
+      stuck: queueRecords.filter((r) => r.status === "stuck").length,
+      enabled: queueSettings.enabled,
+      intervalMinutes: queueSettings.intervalMinutes,
+      lastPublishedAt: queueSettings.lastPublishedAt,
+    };
 
     return {
       statusCode: 200,
@@ -59,6 +76,7 @@ exports.handler = async (event) => {
         healthy,
         total: sources.length,
         sources,
+        queue,
       }),
     };
   } catch (e) {

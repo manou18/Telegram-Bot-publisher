@@ -4,6 +4,7 @@ const { checkSaved } = require("../lib/savedBooks");
 const { checkScheduled } = require("../lib/scheduledBooks");
 const { getRemoteFileSize } = require("../lib/fileSize");
 const { requireAuth } = require("../lib/auth");
+const { buildManualBook, MANUAL_SOURCE_ID } = require("../lib/manualSource");
 
 exports.handler = async (event) => {
   try {
@@ -14,10 +15,16 @@ exports.handler = async (event) => {
       return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
     }
     const { source: sourceId, item } = JSON.parse(event.body || "{}");
-    const source = SOURCES[sourceId];
-    if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
 
-    const book = await source.buildBook(item);
+    let book;
+    if (sourceId === MANUAL_SOURCE_ID) {
+      if (!item || !item.title) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
+      book = buildManualBook(item);
+    } else {
+      const source = SOURCES[sourceId];
+      if (!source || !item) return { statusCode: 400, body: JSON.stringify({ error: "Missing data" }) };
+      book = await source.buildBook(item);
+    }
 
     // Look up sizes for whichever formats are available so the UI can show them before
     // publishing. Done in parallel and best-effort — a host that won't answer stays null
@@ -75,6 +82,20 @@ exports.handler = async (event) => {
       // it means the user deliberately removed it, not that nothing was ever saved.
       book.description = customDescription;
       book.description_is_custom = true;
+    }
+
+    // Same idea for a manually-uploaded/pasted cover — without this, reopening a saved or
+    // scheduled book always showed the source's own cover again, even though a custom one
+    // had been chosen and stored (see savedBooks.js / scheduledBooks.js).
+    let customCoverUrl = null;
+    if (savedRecord && savedRecord.cover_is_custom && savedRecord.cover_url) {
+      customCoverUrl = savedRecord.cover_url;
+    } else if (scheduledRecords.length && scheduledRecords[0].cover_is_custom && scheduledRecords[0].cover_url) {
+      customCoverUrl = scheduledRecords[0].cover_url;
+    }
+    if (customCoverUrl !== null) {
+      book.cover_url = customCoverUrl;
+      book.cover_is_custom = true;
     }
 
     return { statusCode: 200, body: JSON.stringify(book) };

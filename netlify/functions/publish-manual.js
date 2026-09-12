@@ -26,6 +26,7 @@ exports.handler = async (event) => {
       fileType,
       publishCoverOnlyIfNoFile,
       force,
+      channels,
     } = JSON.parse(event.body || "{}");
 
     if (!title || !title.trim()) {
@@ -72,10 +73,10 @@ exports.handler = async (event) => {
       }
     }
 
-    const result = await sendBook(book, !!publishCoverOnlyIfNoFile);
+    const result = await sendBook(book, !!publishCoverOnlyIfNoFile, channels);
 
     try {
-      await recordPublished(event, MANUAL_SOURCE_ID, keyItem, book);
+      await recordPublished(event, MANUAL_SOURCE_ID, keyItem, book, result.posts);
     } catch (e) {
       console.error("Failed to record the book in the publish log:", e.message);
     }
