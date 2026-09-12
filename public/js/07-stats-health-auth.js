@@ -31,6 +31,12 @@ function renderStats(data) {
   if (typeof data.totalViews === "number") {
     statsContent.appendChild(statsRow("Total views 👁", data.totalViews.toLocaleString("en")));
   }
+  if (typeof data.totalReactions === "number") {
+    statsContent.appendChild(statsRow("Total reactions ❤️", data.totalReactions.toLocaleString("en")));
+  }
+  if (typeof data.totalComments === "number") {
+    statsContent.appendChild(statsRow("Total comments 💬", data.totalComments.toLocaleString("en")));
+  }
 
   if (data.queue) {
     statsContent.appendChild(statsSectionTitle("Publish Queue"));
@@ -88,6 +94,33 @@ function renderStats(data) {
     });
   }
 
+  if (data.topReacted && data.topReacted.length) {
+    statsContent.appendChild(statsSectionTitle("Most engagement ❤️💬"));
+    data.topReacted.forEach((b) => {
+      const parts = [];
+      if (b.reactions) parts.push(`❤️ ${b.reactions.toLocaleString("en")}`);
+      if (b.comments) parts.push(`💬 ${b.comments.toLocaleString("en")}`);
+      statsContent.appendChild(statsRow(`${b.title} — ${b.author}`, parts.join(" · ")));
+    });
+  }
+
+  if (data.deadLinks && data.deadLinks.length) {
+    statsContent.appendChild(statsSectionTitle(`⚠️ Dead links (${data.deadLinks.length})`));
+    data.deadLinks.forEach((b) => {
+      const row = document.createElement("div");
+      row.className = "stats-recent-item";
+      const title = document.createElement("div");
+      title.className = "stats-recent-title";
+      title.textContent = `💀 ${b.title}`;
+      const meta = document.createElement("div");
+      meta.className = "stats-recent-meta";
+      meta.textContent = `${b.author}${b.source ? " · " + b.source : ""}`;
+      row.appendChild(title);
+      row.appendChild(meta);
+      statsContent.appendChild(row);
+    });
+  }
+
   statsContent.appendChild(statsSectionTitle("Recently published"));
   if (!data.recent.length) {
     const empty = document.createElement("p");
@@ -106,8 +139,12 @@ function renderStats(data) {
       const meta = document.createElement("div");
       meta.className = "stats-recent-meta";
       const when = b.publishedAt ? new Date(b.publishedAt).toLocaleDateString("en") : "";
-      const viewsPart = b.views ? ` · 👁 ${b.views.toLocaleString("en")}` : "";
-      meta.textContent = `${b.author}${when ? " · " + when : ""}${viewsPart}`;
+      const engagement = [];
+      if (b.views) engagement.push(`👁 ${b.views.toLocaleString("en")}`);
+      if (b.reactions) engagement.push(`❤️ ${b.reactions.toLocaleString("en")}`);
+      if (b.comments) engagement.push(`💬 ${b.comments.toLocaleString("en")}`);
+      const engagementPart = engagement.length ? ` · ${engagement.join(" ")}` : "";
+      meta.textContent = `${b.author}${when ? " · " + when : ""}${engagementPart}`;
 
       item.appendChild(title);
       item.appendChild(meta);
