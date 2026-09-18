@@ -52,3 +52,29 @@ document.addEventListener("keydown", (e) => {
     moreMenuBtn.focus();
   }
 });
+
+// Day/night toggle. The actual theme is already applied to <html data-theme="..."> by
+// the inline script in index.html's <head> (before first paint) — this just keeps the
+// button's own label in sync with that, and handles switching it afterward. The label
+// names the action the click performs (switch to that mode), not the mode you're
+// currently in, per this app's own button-naming convention elsewhere (e.g. "📊 Stats").
+const themeToggleBtn = document.getElementById("themeToggleBtn");
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+function renderThemeToggle() {
+  const isLight = currentTheme() === "light";
+  themeToggleBtn.textContent = isLight ? "🌙 Night" : "☀️ Day";
+  themeToggleBtn.title = isLight ? "Switch to night mode" : "Switch to day mode";
+}
+
+themeToggleBtn.addEventListener("click", () => {
+  const next = currentTheme() === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+  renderThemeToggle();
+});
+
+renderThemeToggle();
