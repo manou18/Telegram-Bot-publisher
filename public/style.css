@@ -122,6 +122,14 @@ select:focus, input:focus, textarea:focus, button:focus {
   outline-offset: 1px;
 }
 
+.nav-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: var(--paper);
+  padding-top: 6px;
+}
+
 .mode-groups {
   display: flex;
   flex-wrap: wrap;
@@ -177,15 +185,55 @@ select:focus, input:focus, textarea:focus, button:focus {
   font-weight: 600;
 }
 
-/* Header "More" menu — collapses Stats/Sources/Export/Import into one dropdown so the
-   header stays compact (especially on mobile) instead of a row of 4 separate buttons.
-   Items are styled as a single flat list (no per-row border/background) rather than
-   stacked buttons, so it reads as one menu instead of a box of separate pills. */
+.tab-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  margin-inline-start: 4px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #241704;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  vertical-align: middle;
+}
+.tab-badge.hidden { display: none; }
+
+/* Header "Backup" menu — Export/Import are rare (there's an automatic scheduled GitHub
+   backup already), so they stay tucked away; Stats/Sources are checked often enough to
+   stay as their own visible buttons right next to it (see .header-actions above). The
+   trigger matches the ghost-button sizing of its siblings so all three sit at the same
+   height, with a caret + label naming exactly what's inside instead of a generic "More". */
 .more-menu { position: relative; }
+.more-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.more-menu-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+.more-menu-caret { font-size: 0.75rem; transition: transform 0.15s ease; }
+.more-menu-btn[aria-expanded="true"] {
+  background: linear-gradient(180deg, #e6b654, var(--green));
+  border-color: var(--green-dark);
+  color: #241704;
+}
+.more-menu-btn[aria-expanded="true"] .more-menu-caret { transform: rotate(180deg); }
 .more-menu-panel {
   position: absolute;
   inset-inline-end: 0;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   display: flex;
   flex-direction: column;
   padding: 6px;
@@ -195,18 +243,44 @@ select:focus, input:focus, textarea:focus, button:focus {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   z-index: 20;
   min-width: 200px;
+  animation: moreMenuOpen 0.12s ease-out;
+}
+@keyframes moreMenuOpen {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .more-menu-panel.hidden { display: none; }
+.more-menu-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  padding: 7px 10px 3px;
+}
+.more-menu-divider {
+  height: 1px;
+  background: var(--rule);
+  margin: 4px 2px;
+}
 .more-menu-panel .more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: start;
   background: none;
   border: none;
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 9px 10px;
   font-weight: 500;
+  font-size: 0.92rem;
+  color: var(--ink);
+  cursor: pointer;
 }
-.more-menu-panel .more-menu-item:hover {
+.more-menu-icon { width: 20px; flex-shrink: 0; text-align: center; font-size: 1rem; }
+.more-menu-panel .more-menu-item:hover,
+.more-menu-panel .more-menu-item:focus-visible {
   background: var(--paper-card-alt);
   color: var(--accent-blue);
 }

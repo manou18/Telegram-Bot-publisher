@@ -39,13 +39,15 @@
         <p class="subhead">Browse, pick, and publish to the channel — no command line needed</p>
       </div>
       <div class="header-actions">
+        <button id="statsBtn" class="btn-ghost">📊 Stats</button>
+        <button id="healthBtn" class="btn-ghost">🩺 Sources</button>
         <div class="more-menu">
-          <button id="moreMenuBtn" class="btn-ghost" aria-haspopup="true" aria-expanded="false">⋮ More</button>
-          <div id="moreMenuPanel" class="more-menu-panel hidden">
-            <button id="statsBtn" class="btn-ghost more-menu-item">📊 Stats</button>
-            <button id="healthBtn" class="btn-ghost more-menu-item">🩺 Sources</button>
-            <button id="exportBtn" class="btn-ghost more-menu-item">⬇️ Export Backup</button>
-            <button id="importBtn" class="btn-ghost more-menu-item">⬆️ Import Backup</button>
+          <button id="moreMenuBtn" class="more-menu-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Backup options">
+            💾 Backup <span class="more-menu-caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="moreMenuPanel" class="more-menu-panel hidden" role="menu">
+            <button id="exportBtn" class="more-menu-item" role="menuitem" type="button"><span class="more-menu-icon">⬇️</span> Export Backup</button>
+            <button id="importBtn" class="more-menu-item" role="menuitem" type="button"><span class="more-menu-icon">⬆️</span> Import Backup</button>
           </div>
         </div>
         <input type="file" id="importFileInput" accept="application/json,.json" class="hidden" />
@@ -64,30 +66,32 @@
         <p class="field-hint">Applies to every Publish / Schedule / Queue action below until you change it.</p>
       </div>
 
-      <div class="mode-groups" role="tablist">
-        <button class="mode-group active" data-group="browse-group" type="button">📚 Browse Sources</button>
-        <button class="mode-group" data-group="lists-group" type="button">📋 My Lists</button>
-        <button class="mode-group" data-group="tools-group" type="button">🛠️ Tools</button>
-      </div>
+      <div class="nav-sticky" id="navSticky">
+        <div class="mode-groups" role="tablist">
+          <button class="mode-group active" data-group="browse-group" type="button">📚 Browse Sources</button>
+          <button class="mode-group" data-group="lists-group" type="button">📋 My Lists</button>
+          <button class="mode-group" data-group="tools-group" type="button">🛠️ Tools</button>
+        </div>
 
-      <div class="mode-tabs" data-group="browse-group" role="tablist">
-        <button class="tab active" data-mode="browse" role="tab">Browse Categories</button>
-        <button class="tab" data-mode="search" role="tab">Search by Name</button>
-        <button class="tab" data-mode="collection" role="tab">Archive.org Collection</button>
-      </div>
-      <div class="mode-tabs hidden" data-group="lists-group" role="tablist">
-        <button class="tab" data-mode="saved" role="tab">📌 Saved Books</button>
-        <button class="tab" data-mode="scheduled" role="tab">🕒 Scheduled</button>
-        <button class="tab" data-mode="queue" role="tab">🔁 Publish Queue</button>
-      </div>
-      <div class="mode-tabs hidden" data-group="tools-group" role="tablist">
-        <button class="tab" data-mode="manual" role="tab">➕ Add Manually</button>
-        <button class="tab" data-mode="mockup" role="tab">🖼️ Cover Mockup</button>
-        <button class="tab" data-mode="copyright" role="tab">🔍 Check Copyright</button>
-        <button class="tab" data-mode="watermark" role="tab">🩹 Remove Watermark</button>
-        <button class="tab" data-mode="compress" role="tab">🗜️ Compress Cover</button>
-        <button class="tab" data-mode="crop" role="tab">✂️ Crop Cover</button>
-        <button class="tab" data-mode="tgpreview" role="tab">📱 Telegram Preview</button>
+        <div class="mode-tabs" data-group="browse-group" role="tablist">
+          <button class="tab active" data-mode="browse" role="tab">🗂️ Browse Categories</button>
+          <button class="tab" data-mode="search" role="tab">🔎 Search by Name</button>
+          <button class="tab" data-mode="collection" role="tab">🗃️ Archive.org Collection</button>
+        </div>
+        <div class="mode-tabs hidden" data-group="lists-group" role="tablist">
+          <button class="tab" data-mode="saved" role="tab">📌 Saved Books <span id="savedBadge" class="tab-badge hidden">0</span></button>
+          <button class="tab" data-mode="scheduled" role="tab">🕒 Scheduled <span id="scheduledBadge" class="tab-badge hidden">0</span></button>
+          <button class="tab" data-mode="queue" role="tab">🔁 Publish Queue <span id="queueBadge" class="tab-badge hidden">0</span></button>
+        </div>
+        <div class="mode-tabs hidden" data-group="tools-group" role="tablist">
+          <button class="tab" data-mode="manual" role="tab">➕ Add Manually</button>
+          <button class="tab" data-mode="mockup" role="tab">🖼️ Cover Mockup</button>
+          <button class="tab" data-mode="copyright" role="tab">🔍 Check Copyright</button>
+          <button class="tab" data-mode="watermark" role="tab">🩹 Remove Watermark</button>
+          <button class="tab" data-mode="compress" role="tab">🗜️ Compress Cover</button>
+          <button class="tab" data-mode="crop" role="tab">✂️ Crop Cover</button>
+          <button class="tab" data-mode="tgpreview" role="tab">📱 Telegram Preview</button>
+        </div>
       </div>
 
       <div class="field" id="categoryField">
