@@ -8,9 +8,64 @@
   --green: #d9a441;           /* primary accent (gold) replaces old "green" role */
   --green-dark: #b6832d;      /* accent hover / darker gold */
   --stamp: #e08a5b;           /* warm accent for warnings / highlights */
+  --stamp-rgb: 224, 138, 91;  /* same color as --stamp, as r,g,b for use inside rgba() */
   --accent-blue: #6f93f0;     /* secondary cool accent for links/rating */
   --font-display: "Amiri", serif;
   --font-body: "Cairo", sans-serif;
+  color-scheme: dark;
+}
+
+/* Day mode — an index card pulled from the same catalog drawer, not just the dark
+   theme with colors flipped: warm aged-paper tan rather than a stark white, ink that
+   reads as brown-black typewriter ribbon rather than pure #000, and the same gold the
+   dark theme uses for its accent, just deepened so it still holds contrast on paper
+   instead of navy. Applied whenever the user has explicitly chosen it (data-theme,
+   set synchronously in <head> before first paint — see the inline script there)... */
+:root[data-theme="light"] {
+  --paper: #ede2c8;
+  --paper-card: #f8f1e0;
+  --paper-card-alt: #e6d7b3;
+  --ink: #2b2013;
+  --ink-soft: #6e5c3f;
+  --rule: #cab98d;
+  --green: #c17f1f;
+  --green-dark: #9c631a;
+  --stamp: #a8461f;
+  --stamp-rgb: 168, 70, 31;
+  --accent-blue: #2d4f9e;
+  color-scheme: light;
+}
+
+/* ...or, with no saved choice yet, whenever the device itself is in light mode — same
+   tokens, just triggered by the OS setting instead of a click. The :not() guard means an
+   explicit dark choice on a light-mode device isn't overridden back to light. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --paper: #ede2c8;
+    --paper-card: #f8f1e0;
+    --paper-card-alt: #e6d7b3;
+    --ink: #2b2013;
+    --ink-soft: #6e5c3f;
+    --rule: #cab98d;
+    --green: #c17f1f;
+    --green-dark: #9c631a;
+    --stamp: #a8461f;
+    --stamp-rgb: 168, 70, 31;
+    --accent-blue: #2d4f9e;
+    color-scheme: light;
+  }
+}
+
+/* The switch itself should feel like turning a page, not a hard cut — but only for
+   people who haven't asked their system to minimize motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    transition: background-color 0.25s ease;
+  }
+  body, .catalog, header, .field, select, input, textarea,
+  [class*="card"], [class*="panel"], [class*="overlay"], .nav-sticky, .tab, .mode-group {
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -46,8 +101,12 @@ body {
     justify-content: space-around;
     align-items: center;
     width: 46px;
+    /* Deliberately not themed — a card-catalog cabinet is dark wood whether the
+       reading room's lights are on or off. Keeping it constant in both modes reads
+       as furniture, not as a leftover dark-mode style. */
     background: linear-gradient(180deg, #0e1428, #16214a);
-    color: var(--green);
+    color: #d9a441; /* the rail's own gold, not var(--green) — that token darkens in
+      light mode for contrast on paper, but this rail's background stays dark either way */
     padding: 32px 0;
     flex-shrink: 0;
     border-inline-end: 1px solid var(--rule);
@@ -419,7 +478,7 @@ select:focus, input:focus, textarea:focus, button:focus {
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top));
   padding-bottom: max(20px, env(safe-area-inset-bottom));
-  z-index: 10;
+  z-index: 50;
 }
 
 .preview-card {
@@ -593,7 +652,7 @@ select:focus, input:focus, textarea:focus, button:focus {
   font-size: 0.88rem;
   margin: 0 0 16px;
   padding: 8px 10px;
-  background: rgba(224, 138, 91, 0.12);
+  background: rgba(var(--stamp-rgb), 0.12);
   border: 1px solid var(--stamp);
   border-radius: 6px;
   color: var(--stamp);
@@ -829,7 +888,7 @@ select:focus, input:focus, textarea:focus, button:focus {
   font-size: 0.85rem;
   margin: 0 0 16px;
   padding: 8px 10px;
-  background: rgba(224, 138, 91, 0.12);
+  background: rgba(var(--stamp-rgb), 0.12);
   border: 1px solid var(--stamp);
   border-radius: 6px;
   color: var(--stamp);

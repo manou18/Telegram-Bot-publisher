@@ -3,6 +3,22 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark light" />
+<script>
+  // Runs synchronously, before style.css is even requested, so the correct theme is
+  // already on <html> by first paint — no flash of the wrong background while the
+  // stylesheet loads, and no fight with the OS/browser's own auto-dark heuristics
+  // (which only kick in on pages that never declare an opinion of their own).
+  // A saved manual choice always wins; otherwise it follows the device's day/night
+  // setting, the same way it did before this app declared a real light theme.
+  (function () {
+    var saved = localStorage.getItem("theme");
+    var theme = saved === "light" || saved === "dark"
+      ? saved
+      : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
 <title>Book Index — Telegram Publisher</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -39,6 +55,7 @@
         <p class="subhead">Browse, pick, and publish to the channel — no command line needed</p>
       </div>
       <div class="header-actions">
+        <button id="themeToggleBtn" class="btn-ghost" type="button"></button>
         <button id="statsBtn" class="btn-ghost">📊 Stats</button>
         <button id="healthBtn" class="btn-ghost">🩺 Sources</button>
         <div class="more-menu">
