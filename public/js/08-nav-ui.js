@@ -1,9 +1,9 @@
 // === 08: Grouped-tab navigation + header "More" menu ===
 // Purely additive UI wiring — doesn't touch setMode()/tabs logic in 02-api-utils.js or
-// 06-manual-save.js. The 8 real tabs (.tab[data-mode]) still work exactly as before;
+// 06-manual-save.js. The real tabs (.tab[data-mode]) still work exactly as before;
 // this just shows/hides which row of them is visible, grouped under 3 pills, so the
-// controls area doesn't show all 8 at once. Must load after the HTML above exists, but
-// has no dependency on the other split files, so its position among them doesn't matter.
+// controls area doesn't show all of them at once. Must load after the HTML above exists,
+// but has no dependency on the other split files, so its position among them doesn't matter.
 
 const modeGroupBtns = document.querySelectorAll(".mode-group");
 const modeTabRows = document.querySelectorAll(".mode-tabs[data-group]");
@@ -39,10 +39,16 @@ moreMenuBtn.addEventListener("click", (e) => {
   }
 });
 moreMenuPanel.addEventListener("click", (e) => {
-  if (e.target.tagName === "BUTTON") closeMoreMenu();
+  if (e.target.closest("button")) closeMoreMenu();
 });
 document.addEventListener("click", (e) => {
   if (!moreMenuPanel.classList.contains("hidden") && !e.target.closest(".more-menu")) {
     closeMoreMenu();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !moreMenuPanel.classList.contains("hidden")) {
+    closeMoreMenu();
+    moreMenuBtn.focus();
   }
 });

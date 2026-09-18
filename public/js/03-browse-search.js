@@ -114,6 +114,7 @@ async function runSaved() {
   try {
     const data = await jsonFetch("/api/saved");
     renderResults(data.results);
+    updateTabBadge(savedBadge, (data.results || []).length);
   } catch (e) {
     statusLine.textContent = `⚠️ ${e.message}`;
   }
@@ -133,6 +134,7 @@ async function runScheduled() {
   try {
     const data = await jsonFetch("/api/scheduled");
     const records = data.records || [];
+    updateTabBadge(scheduledBadge, records.filter((r) => r.status === "pending").length);
     statusLine.textContent = records.length
       ? `${records.length} scheduled book${records.length === 1 ? "" : "s"}`
       : "No scheduled books.";

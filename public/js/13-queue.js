@@ -110,6 +110,7 @@ async function runQueue() {
     const data = await jsonFetch("/api/queue-list");
     const records = data.records || [];
     const settings = data.settings || { enabled: false, intervalMinutes: 60 };
+    updateTabBadge(queueBadge, records.length);
 
     const { value, unit } = splitIntervalMinutes(settings.intervalMinutes);
     queueEnabledToggle.checked = !!settings.enabled;

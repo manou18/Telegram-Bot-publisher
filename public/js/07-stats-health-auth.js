@@ -239,6 +239,7 @@ async function unlockApp() {
   await loadSources();
   await loadChannels();
   statusLine.textContent = "Choose a source above to browse, or switch to Search.";
+  refreshTabBadges(); // fire-and-forget — fills in the Saved/Scheduled/Queue tab counts
 }
 
 async function attemptLogin(password) {

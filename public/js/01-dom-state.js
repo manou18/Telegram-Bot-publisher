@@ -15,6 +15,32 @@ const collectionInput = document.getElementById("collectionInput");
 const collectionBtn = document.getElementById("collectionBtn");
 const resultsList = document.getElementById("resultsList");
 const statusLine = document.getElementById("statusLine");
+const savedBadge = document.getElementById("savedBadge");
+const scheduledBadge = document.getElementById("scheduledBadge");
+const queueBadge = document.getElementById("queueBadge");
+
+// Small helper shared by runSaved/runScheduled/runQueue (03-browse-search.js,
+// 13-queue.js) to keep each tab's live count badge in sync with its last fetch.
+function updateTabBadge(badgeEl, count) {
+  if (!badgeEl) return;
+  badgeEl.textContent = count > 99 ? "99+" : String(count);
+  badgeEl.classList.toggle("hidden", !count);
+}
+
+// Populates the Saved/Scheduled/Queue badges right after login, before the user has
+// switched to any of those tabs — otherwise the counts would only appear the first time
+// each tab is opened. Silent by design: no statusLine/resultsList changes, no error UI,
+// since this is a background nicety, not something the user asked for.
+async function refreshTabBadges() {
+  const requests = [
+    jsonFetch("/api/saved").then((d) => updateTabBadge(savedBadge, (d.results || []).length)),
+    jsonFetch("/api/scheduled").then((d) =>
+      updateTabBadge(scheduledBadge, (d.records || []).filter((r) => r.status === "pending").length)
+    ),
+    jsonFetch("/api/queue-list").then((d) => updateTabBadge(queueBadge, (d.records || []).length)),
+  ];
+  await Promise.allSettled(requests);
+}
 const ratingFilterSelect = document.getElementById("ratingFilterSelect");
 const savedSearchInput = document.getElementById("savedSearchInput");
 const nextPageBtn = document.getElementById("nextPageBtn");
