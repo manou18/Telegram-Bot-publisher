@@ -22,15 +22,15 @@ function keyFor(groupChatId, rootMessageId) {
   return `${groupChatId}:${rootMessageId}`;
 }
 
-async function recordThreadRoot(event, groupChatId, rootMessageId, channelChatId, channelMessageId) {
+async function recordThreadRoot(event, groupChatId, rootMessageId, channelChatId, channelMessageId, channelUsername) {
   const store = getThreadStore(event);
   await store.set(
     keyFor(groupChatId, rootMessageId),
-    JSON.stringify({ channelChatId, channelMessageId, createdAt: new Date().toISOString() })
+    JSON.stringify({ channelChatId, channelMessageId, channelUsername: channelUsername || undefined, createdAt: new Date().toISOString() })
   );
 }
 
-// Returns { channelChatId, channelMessageId } or null if this thread's root was never
+// Returns { channelChatId, channelMessageId, channelUsername? } or null if this thread's root was never
 // seen — e.g. the webhook was only set up after that post's comments already started.
 async function resolveThread(event, groupChatId, rootMessageId) {
   const store = getThreadStore(event);

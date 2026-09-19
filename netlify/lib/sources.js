@@ -229,7 +229,7 @@ async function fetchArchiveInfo(iaId, extensions) {
       .trim();
   }
 
-  return { files: found, description: description || null };
+  return { files: found, description: description || null, language: meta.language || null };
 }
 
 // Open Library descriptions don't come directly with search/browse results — they require a
@@ -313,11 +313,13 @@ async function openlibraryBuildBook(doc) {
   let coverUrl = null;
   let description = null;
   let usedIaId = null;
+  let language = null;
 
   if (iaIds.length) {
     const found = await findUsableArchiveCopy(iaIds, [".pdf", ".epub"]);
     if (found) {
       usedIaId = found.iaId;
+      language = found.info.language || null;
       downloadUrlPdf = found.info.files[".pdf"];
       downloadUrlEpub = found.info.files[".epub"];
       coverUrl = `https://archive.org/services/img/${found.iaId}`;
@@ -345,6 +347,7 @@ async function openlibraryBuildBook(doc) {
     download_url_pdf: downloadUrlPdf,
     download_url_epub: downloadUrlEpub,
     description,
+    language, // archive.org's own language tag for the scan we picked (used by the bot's English-only filter)
     source: "Open Library / Internet Archive",
     source_rating: sourceRating,
     source_rating_count: sourceRatingCount,
@@ -392,6 +395,7 @@ async function archiveEduAdvancedSearch(event, query, pageToken) {
   params.append("fl[]", "identifier");
   params.append("fl[]", "title");
   params.append("fl[]", "creator");
+  params.append("fl[]", "language");
   params.append("sort[]", "downloads desc");
   params.append("rows", "10");
   params.append("page", String(page));
@@ -438,6 +442,7 @@ async function archiveEduBuildBook(doc) {
     download_url_pdf: downloadUrlPdf,
     download_url_epub: downloadUrlEpub,
     description: info.description,
+    language: info.language || null,
     source: "Internet Archive — Education & Teaching",
     // Fallback for when the item turned out to be borrow-only/restricted (no direct
     // file above) — at least send the user to the item's own archive.org page instead

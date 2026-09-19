@@ -7,6 +7,7 @@
 const { buildCoverMockup } = require("./coverMockup");
 const { resolveChatIds } = require("./channels");
 const { createDescriptionPage } = require("./telegraph");
+const { botLink } = require("./botLinks");
 
 function getBotToken() {
   const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -28,12 +29,26 @@ async function telegramPost(method, payload) {
   return data;
 }
 
-async function sendPhotoBuffer(chatId, buffer, caption) {
+// The button under the cover/caption post that opens the interactive search bot. Skipped (never an
+// error) when POST_BOT_BUTTON=off or the bot's @username can't be determined — publishing must
+// not depend on it.
+async function postBotButton() {
+  if (/^(off|false|0|no)$/i.test(String(process.env.POST_BOT_BUTTON || "").trim())) return undefined;
+  try {
+    const url = await botLink("post");
+    return url ? { inline_keyboard: [[{ text: "🔎 Search any book", url }]] } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function sendPhotoBuffer(chatId, buffer, caption, replyMarkup) {
   const BOT_TOKEN = getBotToken();
   const form = new FormData();
   form.append("chat_id", chatId);
   form.append("caption", caption);
   form.append("parse_mode", "HTML");
+  if (replyMarkup) form.append("reply_markup", JSON.stringify(replyMarkup));
   form.append("photo", new Blob([buffer], { type: "image/png" }), "cover.png");
   const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
     method: "POST",
@@ -116,29 +131,31 @@ async function sendCoverAndCaption(book, chatId) {
   // tracked against later (see lib/telegramViews.js + refresh-views.js) — it's the one
   // message per channel that actually represents "this book's listing", whether or not a
   // separate file document also gets sent after it.
+  const replyMarkup = await postBotButton();
   let sendResult;
   if (book.cover_url) {
     try {
       const mockupBuffer = await buildCoverMockup(book.cover_url);
-      sendResult = await sendPhotoBuffer(chatId, mockupBuffer, caption);
+      sendResult = await sendPhotoBuffer(chatId, mockupBuffer, caption, replyMarkup);
     } catch (mockupError) {
       console.warn(`Failed to build the 3D cover mockup (${mockupError.message}), falling back to the plain cover.`);
       if (book.cover_url.startsWith("data:")) {
         // A manually uploaded cover — can't be proxied through wsrv.nl (it needs a fetchable
         // URL), so send the decoded image bytes directly instead.
         const base64 = book.cover_url.split(",")[1] || "";
-        sendResult = await sendPhotoBuffer(chatId, Buffer.from(base64, "base64"), caption);
+        sendResult = await sendPhotoBuffer(chatId, Buffer.from(base64, "base64"), caption, replyMarkup);
       } else {
         sendResult = await telegramPost("sendPhoto", {
           chat_id: chatId,
           photo: paddedCoverUrl(book.cover_url),
           caption,
           parse_mode: "HTML",
+          reply_markup: replyMarkup,
         });
       }
     }
   } else {
-    sendResult = await telegramPost("sendMessage", { chat_id: chatId, text: caption, parse_mode: "HTML" });
+    sendResult = await telegramPost("sendMessage", { chat_id: chatId, text: caption, parse_mode: "HTML", reply_markup: replyMarkup });
   }
   return sendResult && sendResult.result ? sendResult.result.message_id : null;
 }
