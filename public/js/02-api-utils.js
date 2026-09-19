@@ -34,10 +34,30 @@ function normalizeSearchText(text) {
     .trim();
 }
 
+// Words common enough in a title/author query that matching them alone says nothing about
+// relevance — searching "the return of the king" shouldn't let "the" and "of" carry as much
+// weight as "return" and "king" in the word-fraction fallback below. Kept short and
+// conservative (English + Arabic function words) rather than a full stopword list, since
+// this only needs to stop the most common offenders from inflating a weak match, not
+// perfectly model either language's grammar.
+const LOW_SIGNAL_WORDS = new Set([
+  "the", "a", "an", "of", "and", "or", "in", "on", "at", "to", "for", "by", "with",
+  "في", "من", "الى", "إلى", "على", "او", "أو", "و", "ال",
+]);
+const LOW_SIGNAL_WORD_WEIGHT = 0.15; // still counts for something — a title made up
+// entirely of stopwords shouldn't divide by zero, and a coincidental stopword match is
+// weak evidence, not zero evidence.
+
+function wordWeight(word) {
+  return LOW_SIGNAL_WORDS.has(word) ? LOW_SIGNAL_WORD_WEIGHT : 1;
+}
+
 // How well one field (title or author) matches the query: exact match scores highest,
 // then "field starts with query" / "query starts with field", then substring containment,
-// then partial credit for the fraction of query words that appear in the field. Returns 0
-// when nothing in the query relates to the field at all.
+// then partial credit for the fraction of query words that appear in the field — weighted
+// so a match made up mostly of stopwords ("the", "of", "و", "في"...) scores far below one
+// where the actual content words matched. Returns 0 when nothing in the query relates to
+// the field at all.
 function fieldMatchScore(query, field) {
   if (!query || !field) return 0;
   if (field === query) return 1000;
@@ -46,20 +66,28 @@ function fieldMatchScore(query, field) {
   const queryWords = query.split(" ").filter(Boolean);
   if (!queryWords.length) return 0;
   const fieldWords = new Set(field.split(" ").filter(Boolean));
-  const matched = queryWords.filter((w) => fieldWords.has(w)).length;
-  return matched ? Math.round(200 * (matched / queryWords.length)) : 0;
+  const totalWeight = queryWords.reduce((sum, w) => sum + wordWeight(w), 0);
+  const matchedWeight = queryWords.filter((w) => fieldWords.has(w)).reduce((sum, w) => sum + wordWeight(w), 0);
+  return matchedWeight ? Math.round(200 * (matchedWeight / totalWeight)) : 0;
 }
 
-// Combined relevance of one result row against the current search text: the better of its
-// title-match and author-match scores (a title search and an author search both go through
-// this same scoring, whichever field the query actually matches).
+// Combined relevance of one result row against the current search text. Mostly the better
+// of its title-match and author-match scores (a title search and an author search both go
+// through this same scoring, whichever field the query actually matches) — but when BOTH
+// fields independently match (e.g. "tolstoy war and peace" hitting the title on "war and
+// peace" AND the author on "tolstoy"), that's stronger evidence than either alone, so the
+// weaker field's score is added in at a fraction of its value as a bonus. A row that only
+// ever matched one field is completely unaffected (the bonus is 0 when the other score is).
+const CROSS_FIELD_BONUS_FACTOR = 0.3;
+
 function relevanceScore(query, line) {
   if (!query) return 0;
   const { title, author } = splitTitleAuthor(line);
-  return Math.max(
-    fieldMatchScore(query, normalizeSearchText(title)),
-    fieldMatchScore(query, normalizeSearchText(author))
-  );
+  const titleScore = fieldMatchScore(query, normalizeSearchText(title));
+  const authorScore = fieldMatchScore(query, normalizeSearchText(author));
+  const bigger = Math.max(titleScore, authorScore);
+  const smaller = Math.min(titleScore, authorScore);
+  return bigger + smaller * CROSS_FIELD_BONUS_FACTOR;
 }
 
 // Applies the active rating filter (and, for the Saved tab, the title/author search box)
