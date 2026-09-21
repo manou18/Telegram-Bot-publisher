@@ -58,6 +58,7 @@ const t = {
 
   help: () =>
     [
+      "🆕 <b>DEPLOY TEST v2</b> — if you can see this line, the new code is live.",
       "📖 <b>How it works</b>",
       "",
       "<b>1 · Search</b> — send the English title and author:",
