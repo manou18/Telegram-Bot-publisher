@@ -2,6 +2,14 @@
   publish = "public"
   functions = "netlify/functions"
 
+[build.environment]
+  # BOT_BRAND is not a secret (it's the bot's display name/branding text), but it's set
+  # as an env var and appears verbatim in several files (README, index.html, feed.js...).
+  # Netlify's secret scanner flags any env var value found in build output, so we tell it
+  # to skip this one. If you add other non-secret env vars that also show up in code,
+  # append them here comma-separated, e.g. "BOT_BRAND,SOME_OTHER_KEY".
+  SECRETS_SCAN_OMIT_KEYS = "BOT_BRAND"
+
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["sharp"]
