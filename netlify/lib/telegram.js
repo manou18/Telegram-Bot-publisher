@@ -133,7 +133,24 @@ async function sendCoverAndCaption(book, chatId) {
   // separate file document also gets sent after it.
   const replyMarkup = await postBotButton();
   let sendResult;
-  if (book.cover_url) {
+  if (book.cover_url && book.cover_is_custom) {
+    // A cover the user picked/uploaded/edited themselves (from the "Custom cover" step, or
+    // any manual-entry book) is published exactly as given — no 3D mockup wrapping around it.
+    if (book.cover_url.startsWith("data:")) {
+      // Uploaded file as a data: URI — can't be proxied through wsrv.nl (it needs a fetchable
+      // URL), so send the decoded image bytes directly instead.
+      const base64 = book.cover_url.split(",")[1] || "";
+      sendResult = await sendPhotoBuffer(chatId, Buffer.from(base64, "base64"), caption, replyMarkup);
+    } else {
+      sendResult = await telegramPost("sendPhoto", {
+        chat_id: chatId,
+        photo: paddedCoverUrl(book.cover_url),
+        caption,
+        parse_mode: "HTML",
+        reply_markup: replyMarkup,
+      });
+    }
+  } else if (book.cover_url) {
     try {
       const mockupBuffer = await buildCoverMockup(book.cover_url);
       sendResult = await sendPhotoBuffer(chatId, mockupBuffer, caption, replyMarkup);
