@@ -417,7 +417,8 @@ async function onMessage(event, message) {
 
 async function onCallback(event, cb) {
   const chatId = cb.message && cb.message.chat && cb.message.chat.id;
-  const answer = (extra = {}) => tg("answerCallbackQuery", { callback_query_id: cb.id, ...extra }).catch(() => {});
+  console.log("DEBUG onCallback: data=", cb.data, "chatId=", chatId, "cb.id=", cb.id, "hasMessage=", !!cb.message);
+  const answer = (extra = {}) => tg("answerCallbackQuery", { callback_query_id: cb.id, ...extra }).catch((e) => console.log("DEBUG answerCallbackQuery failed:", e.message));
   if (!chatId) return void (await answer());
   await touchUser(event, chatId);
 
@@ -425,10 +426,18 @@ async function onCallback(event, cb) {
   const menu = /^m:(help|bal|buy|support)$/.exec(cb.data || "");
   if (menu) {
     await answer();
-    if (menu[1] === "help") return void (await send(chatId, t.help()));
+    if (menu[1] === "help") {
+      const r = await send(chatId, t.help());
+      console.log("DEBUG sent help, message_id=", r && r.message_id, "to chatId=", chatId);
+      return;
+    }
     if (menu[1] === "support") return void (await send(chatId, t.paySupport()));
     const account = await getAccount(event, chatId);
-    if (menu[1] === "bal") return void (await send(chatId, t.balance(account), { reply_markup: { inline_keyboard: [[buyButton]] } }));
+    if (menu[1] === "bal") {
+      const r = await send(chatId, t.balance(account), { reply_markup: { inline_keyboard: [[buyButton]] } });
+      console.log("DEBUG sent balance, message_id=", r && r.message_id, "to chatId=", chatId);
+      return;
+    }
     return void (await send(chatId, t.buyIntro(account), { reply_markup: packKeyboard() }));
   }
 
