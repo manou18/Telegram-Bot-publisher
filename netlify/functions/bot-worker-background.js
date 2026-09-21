@@ -58,7 +58,6 @@ const t = {
 
   help: () =>
     [
-      "🆕 <b>DEPLOY TEST v2</b> — if you can see this line, the new code is live.",
       "📖 <b>How it works</b>",
       "",
       "<b>1 · Search</b> — send the English title and author:",
@@ -418,8 +417,7 @@ async function onMessage(event, message) {
 
 async function onCallback(event, cb) {
   const chatId = cb.message && cb.message.chat && cb.message.chat.id;
-  console.log("DEBUG onCallback: data=", cb.data, "chatId=", chatId, "cb.id=", cb.id, "hasMessage=", !!cb.message);
-  const answer = (extra = {}) => tg("answerCallbackQuery", { callback_query_id: cb.id, ...extra }).catch((e) => console.log("DEBUG answerCallbackQuery failed:", e.message));
+  const answer = (extra = {}) => tg("answerCallbackQuery", { callback_query_id: cb.id, ...extra }).catch(() => {});
   if (!chatId) return void (await answer());
   await touchUser(event, chatId);
 
@@ -428,15 +426,13 @@ async function onCallback(event, cb) {
   if (menu) {
     await answer();
     if (menu[1] === "help") {
-      const r = await send(chatId, t.help());
-      console.log("DEBUG sent help, message_id=", r && r.message_id, "to chatId=", chatId);
+      await send(chatId, t.help());
       return;
     }
     if (menu[1] === "support") return void (await send(chatId, t.paySupport()));
     const account = await getAccount(event, chatId);
     if (menu[1] === "bal") {
-      const r = await send(chatId, t.balance(account), { reply_markup: { inline_keyboard: [[buyButton]] } });
-      console.log("DEBUG sent balance, message_id=", r && r.message_id, "to chatId=", chatId);
+      await send(chatId, t.balance(account), { reply_markup: { inline_keyboard: [[buyButton]] } });
       return;
     }
     return void (await send(chatId, t.buyIntro(account), { reply_markup: packKeyboard() }));
