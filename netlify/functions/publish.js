@@ -53,6 +53,9 @@ exports.handler = async (event) => {
     // priority over whatever the source fetched, when the user picked "Custom cover" in the UI.
     if (effectiveCoverUrl) {
       book.cover_url = effectiveCoverUrl;
+      // A cover the user picked/uploaded/edited themselves publishes as-is — see
+      // sendCoverAndCaption in lib/telegram.js, which skips the 3D mockup for these.
+      book.cover_is_custom = true;
     }
     // User-edited or AI-rewritten description from the preview screen takes priority over
     // whatever the source's raw metadata had — this is exactly the fix for long/inaccurate

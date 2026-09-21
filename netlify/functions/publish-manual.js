@@ -47,6 +47,9 @@ exports.handler = async (event) => {
       source: "Manual Entry",
       rating: null,
       category: null,
+      // Manual entries are always a cover the user picked/uploaded themselves — never route
+      // through the 3D mockup, publish it exactly as given (see lib/telegram.js).
+      cover_is_custom: !!coverUrl,
     };
 
     // Only title+author go into the dedupe key — not the (possibly large) cover/file data.

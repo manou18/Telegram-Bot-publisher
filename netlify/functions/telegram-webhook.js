@@ -23,6 +23,7 @@ const { updatePostReactions, incrementPostComments } = require("../lib/publishLo
 const { recordThreadRoot, resolveThread } = require("../lib/commentThreads");
 const { packFromPayload } = require("../lib/botPlans");
 const { onGroupComment } = require("../lib/commentBot");
+const { processBotUpdate } = require("./bot-worker-background");
 
 // Telegram gives a bot only 10 seconds to approve a payment ("pre-checkout"), so this is answered
 // right here instead of going through the slower background worker. We approve it only if it
@@ -40,28 +41,18 @@ async function answerPreCheckout(q) {
   });
 }
 
-// Forwards a private-chat message / button tap to the interactive book bot (see
-// bot-worker-background.js). The worker is a Netlify *background* function, so this call
-// returns almost immediately (202) and Telegram gets its 200 without waiting for the search.
+// Hands a private-chat message / button tap to the interactive book bot (see
+// bot-worker-background.js). This used to fire an HTTP request at that file's own
+// "-background" endpoint so it would run asynchronously — but Netlify only runs
+// "-background" functions on Pro plans and above; on the Free plan that request
+// silently never executes anything. So instead we just call the same logic
+// in-process and await it right here. The trade-off: this function is now a normal
+// (non-background) function with Netlify's standard ~10 second execution limit, so a
+// very slow search or a large book download could time out — acceptable for most
+// public-domain PDFs/EPUBs, but worth knowing if you upgrade to Pro later and want to
+// switch back to true background execution.
 async function forwardToBotWorker(event, update) {
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (!secret) {
-    console.error("TELEGRAM_WEBHOOK_SECRET must be set to use the interactive book bot — ignoring update.");
-    return;
-  }
-  const base = process.env.SITE_URL || process.env.URL || `https://${(event.headers || {}).host}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    await fetch(`${base}/.netlify/functions/bot-worker-background`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Bot-Worker-Secret": secret },
-      body: JSON.stringify(update),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  await processBotUpdate(event, update);
 }
 
 exports.handler = async (event) => {

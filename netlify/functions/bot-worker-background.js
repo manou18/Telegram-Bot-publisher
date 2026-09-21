@@ -283,6 +283,26 @@ function resultsCard(q, results, account) {
 
 // ---------------------------------------------------------------- entry point
 
+// The actual work: routes an update to the callback/message handler and makes sure a failure
+// still gets *something* back to the user instead of silent nothing. Exported so telegram-webhook.js
+// can call it directly, in-process, instead of firing an HTTP request at this file's own endpoint
+// (that indirection only works when "-background" functions are enabled, which requires a Netlify
+// Pro plan or above; on the Free plan a self-fetch to a "-background" function never runs).
+async function processBotUpdate(event, update) {
+  const chatId = (update.callback_query && update.callback_query.message && update.callback_query.message.chat.id) ||
+    (update.message && update.message.chat && update.message.chat.id);
+
+  try {
+    if (update.callback_query) await onCallback(event, update.callback_query);
+    else if (update.message) await onMessage(event, update.message);
+  } catch (e) {
+    console.error("Bot worker failed:", e);
+    if (chatId) await send(chatId, t.error).catch(() => {});
+  }
+}
+
+// Kept so this file still works as a standalone endpoint (e.g. if you upgrade to Pro and want to
+// go back to true background execution). Not used by telegram-webhook.js anymore.
 exports.handler = async (event) => {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret || (event.headers || {})["x-bot-worker-secret"] !== secret) {
@@ -296,18 +316,11 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: "" };
   }
 
-  const chatId = (update.callback_query && update.callback_query.message && update.callback_query.message.chat.id) ||
-    (update.message && update.message.chat && update.message.chat.id);
-
-  try {
-    if (update.callback_query) await onCallback(event, update.callback_query);
-    else if (update.message) await onMessage(event, update.message);
-  } catch (e) {
-    console.error("Bot worker failed:", e);
-    if (chatId) await send(chatId, t.error).catch(() => {});
-  }
+  await processBotUpdate(event, update);
   return { statusCode: 200, body: "" };
 };
+
+exports.processBotUpdate = processBotUpdate;
 
 // ---------------------------------------------------------------- messages & commands
 
