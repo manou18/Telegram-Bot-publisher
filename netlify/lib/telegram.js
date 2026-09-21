@@ -256,7 +256,25 @@ async function sendToOneChannel(book, publishCoverOnlyIfNoFile, chatId) {
     return { status: "cover_only", message: `Published cover and info only for: ${book.title}`, messageId };
   }
   const messageId = await sendCoverAndCaption(book, chatId);
-  await sendBookFile(book, chatId);
+  try {
+    await sendBookFile(book, chatId);
+  } catch (fileError) {
+    // The file itself (PDF/EPUB) failed to send — broken link, over the size limit, or
+    // Telegram rejected it. Don't leave the cover/title/description post advertising a book
+    // that has no actual file behind it: remove it and surface this as a normal publish
+    // failure (same as if sendCoverAndCaption itself had thrown).
+    if (messageId) {
+      try {
+        await telegramPost("deleteMessage", { chat_id: chatId, message_id: messageId });
+      } catch (deleteError) {
+        console.error(
+          `Failed to remove the cover/caption post after the file failed to send (chatId=${chatId}, messageId=${messageId}):`,
+          deleteError.message
+        );
+      }
+    }
+    throw fileError;
+  }
   return { status: "published", message: `Published: ${book.title}`, messageId };
 }
 
