@@ -294,7 +294,9 @@ async function executeBulkPublish(items) {
           source: r.source,
           item: r.item,
           category: r.category || null,
-          publishCoverOnlyIfNoFile: true,
+          // Never auto-publish the cover/title/description alone when a book has no file —
+          // a book with no downloadable file is skipped entirely instead.
+          publishCoverOnlyIfNoFile: false,
           force: false,
           channels: getSelectedChannelIds(),
         }),
@@ -361,7 +363,9 @@ async function runBulkSchedule() {
           source: r.source,
           item: r.item,
           category: r.category || null,
-          publishCoverOnlyIfNoFile: true,
+          // Never auto-publish the cover/title/description alone when a book has no file —
+          // a book with no downloadable file is skipped entirely instead.
+          publishCoverOnlyIfNoFile: false,
           scheduledFor: scheduledForIso,
           channels: getSelectedChannelIds(),
         }),
