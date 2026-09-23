@@ -255,7 +255,7 @@ function runBulkPublish() {
   if (!items.length) return;
 
   bulkReviewSummary.textContent = `About to publish ${items.length} book${items.length === 1 ? "" : "s"} to the channel:`;
-  bulkReviewList.innerHTML = items.map((r) => `<li>${r.line.replace(/^📌\s*/, "")}</li>`).join("");
+  bulkReviewList.innerHTML = items.map((r) => `<li>${escapeHtml(r.line.replace(/^📌\s*/, ""))}</li>`).join("");
   bulkPublishReviewOverlay.classList.remove("hidden");
 }
 

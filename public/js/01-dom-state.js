@@ -1,6 +1,20 @@
 // === 01: DOM element references + shared module-level state (mode flags, current selections, form values) ===
 // Loaded first — everything else in public/js/ reads/writes these globals.
 
+// Escapes text before it's inserted via innerHTML anywhere a book's title/author (sourced from
+// external APIs — Gutenberg, archive.org, Google Books...) ends up in markup rather than plain
+// text. Without this, a crafted title containing HTML could run arbitrary JS in this admin panel
+// — and since the site password lives in localStorage (see SITE_PASSWORD_STORAGE_KEY below), that
+// would mean full control over what gets published to the real Telegram channel.
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 const sourceSelect = document.getElementById("sourceSelect");
 const sourceField = document.getElementById("sourceField");
 const channelField = document.getElementById("channelField");
