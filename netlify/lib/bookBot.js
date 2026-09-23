@@ -5,6 +5,7 @@
 // public-domain volumes, OAPEN, DOAB). No shadow libraries are involved.
 
 const { SOURCES } = require("./sources");
+const { getCachedSearch, setCachedSearch } = require("./searchCache");
 
 // ---------- text helpers (Latin + Arabic aware) ----------
 
@@ -210,8 +211,25 @@ async function withSourceCall(fn, ms, label) {
   }
 }
 
+// Cache key: normalized title+author (so casing/spacing/punctuation variants of the same query
+// share one cache entry) plus the disabled-sources list (so flipping BOT_DISABLED_SOURCES doesn't
+// serve results built with a source that's since been turned off, or hide one that's back on).
+function cacheKeyFor(q) {
+  const disabled = (process.env.BOT_DISABLED_SOURCES || "")
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter(Boolean)
+    .sort((a, b) => a - b)
+    .join(",");
+  return `${normalize(q.title)}|${normalize(q.author)}|${disabled}`;
+}
+
 // Returns { results: [{ source, title, author, pdf, epub, score, sourceUrl }], failedSources: [names] }
 async function searchBooks(event, q) {
+  const cacheKey = cacheKeyFor(q);
+  const cached = await getCachedSearch(event, cacheKey);
+  if (cached) return cached;
+
   const failedSources = [];
 
   // 1) search every source in parallel, rank the raw hits by title/author similarity
@@ -307,7 +325,13 @@ async function searchBooks(event, q) {
   const hasStrongMatch = ranked.some((r) => r.score >= MIN_SCORE);
   const results = ranked.slice(0, MAX_RESULTS);
   const approximate = !hasStrongMatch && results.length > 0;
-  return { results, failedSources, approximate };
+  const out = { results, failedSources, approximate };
+
+  // Only cache a clean run (every source reachable) with actual hits. A partial-outage result
+  // isn't representative of a healthy search, and a genuine "nothing found" is cheap to re-check
+  // next time anyway — in case a source adds the book later — so neither is worth caching.
+  if (results.length && !failedSources.length) await setCachedSearch(event, cacheKey, out);
+  return out;
 }
 
 // ---------- Telegram helpers ----------
