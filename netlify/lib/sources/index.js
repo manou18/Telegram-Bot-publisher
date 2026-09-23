@@ -11,7 +11,7 @@ const archiveEdu = require("./archiveEdu");
 const oapen = require("./oapen");
 const googleBooks = require("./googleBooks");
 const doab = require("./doab");
-const libmanou = require("./libmanou"); // EXAMPLE — fictional source, see libmanou.js
+const searchLibGen = require("./searchLibGen"); // Updated to real source
 const { fetchJson } = require("./_http");
 
 const SOURCES = {
@@ -21,7 +21,7 @@ const SOURCES = {
   4: oapen,
   5: googleBooks,
   6: doab,
-  7: libmanou, // EXAMPLE — remove this line (and libmanou.js) once you don't need it anymore
+  7: searchLibGen, // Updated to real source
 };
 
 // Kept for backward compatibility — netlify/functions/collection.js and
