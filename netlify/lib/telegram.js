@@ -17,6 +17,23 @@ function getBotToken() {
   return BOT_TOKEN;
 }
 
+// Book URLs come from source APIs (Gutenberg, archive.org, OAPEN/DOAB...), not directly from a
+// user, so this is defense-in-depth rather than a response to a known attack: it stops a
+// tampered or malicious metadata record (e.g. a bad bitstream URL) from making the server fetch
+// something like file:// or an internal address instead of an actual book.
+function assertFetchableUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Malformed download URL.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`Refusing to fetch a non-http(s) URL (${parsed.protocol}).`);
+  }
+  return parsed;
+}
+
 async function telegramPost(method, payload) {
   const BOT_TOKEN = getBotToken();
   const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
@@ -216,7 +233,8 @@ async function sendBookFile(book, chatId) {
     console.warn(`Failed to send the URL directly (${urlError.message}), downloading then uploading...`);
   }
 
-  const fileRes = await fetch(book.download_url);
+  const fetchUrl = assertFetchableUrl(book.download_url);
+  const fileRes = await fetch(fetchUrl);
   if (!fileRes.ok) {
     throw new Error(`Failed to download the file from the source (HTTP ${fileRes.status}).`);
   }

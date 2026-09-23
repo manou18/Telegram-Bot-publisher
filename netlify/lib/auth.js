@@ -17,6 +17,17 @@ const { connectLambda, getStore } = require("@netlify/blobs");
 const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 60 * 60 * 1000; // 1 hour
 
+// Constant-time string comparison for secrets (site password, webhook token). A plain `===`
+// bails out at the first mismatched character, so response time can leak how many leading
+// characters an attacker has guessed correctly. Hashing both sides to a fixed-length digest
+// first also means crypto.timingSafeEqual never has to deal with a length mismatch (which it
+// would otherwise throw on), so a wrong-length guess doesn't take a different code path either.
+function safeCompare(a, b) {
+  const hashA = crypto.createHash("sha256").update(String(a ?? "")).digest();
+  const hashB = crypto.createHash("sha256").update(String(b ?? "")).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
+
 function getClientId(event) {
   const headers = event.headers || {};
   const forwardedFor = headers["x-forwarded-for"];
@@ -98,7 +109,7 @@ async function requireAuth(event) {
   const headers = event.headers || {};
   const provided = headers["x-site-password"] || headers["X-Site-Password"];
 
-  if (provided === expected) {
+  if (safeCompare(provided, expected)) {
     if (attempts.count > 0 || attempts.lockedUntil) {
       try {
         await clearAttempts(event, clientId);
@@ -136,4 +147,4 @@ async function requireAuth(event) {
   };
 }
 
-module.exports = { requireAuth };
+module.exports = { requireAuth, safeCompare };
