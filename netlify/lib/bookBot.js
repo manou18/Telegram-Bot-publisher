@@ -158,7 +158,7 @@ function splitDisplayLine(line) {
 
 // ---------- searching ----------
 
-const SEARCH_SOURCES = [1, 2, 5, 3, 4, 6, 7]; // Gutenberg, Open Library/IA, Google Books (PD), IA texts, OAPEN, DOAB, libmanou (EXAMPLE)
+const SEARCH_SOURCES = [1, 2, 5, 3, 4, 6, 7]; // Gutenberg, Open Library/IA, Google Books (PD), IA texts, OAPEN, DOAB, searchLibGen
 const SOURCE_TIMEOUT_MS = 15000;
 const MIN_SCORE = 0.6;
 // Used only when nothing clears MIN_SCORE: a second, looser pass so the user gets the closest
