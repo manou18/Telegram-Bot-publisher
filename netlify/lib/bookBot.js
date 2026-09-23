@@ -87,6 +87,7 @@ function declaredLanguages(sourceId, raw) {
     case 5: return toArr(raw.volumeInfo && raw.volumeInfo.language); // Google Books: "en"
     case 4:
     case 6: return meta(raw);                                   // DSpace (OAPEN / DOAB): dc.language.iso
+    case 7: return toArr(raw.language);                         // LibGen
     default: return null;
   }
 }
