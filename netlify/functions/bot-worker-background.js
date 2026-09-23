@@ -254,7 +254,7 @@ function resultsKeyboard(results) {
 // A "download directly" button — only for links Telegram will accept as URL buttons.
 const linkKeyboard = (url, label) => (/^https?:\/\//i.test(url) ? { inline_keyboard: [[{ text: label, url }]] } : undefined);
 
-function resultsCard(q, results, account) {
+function resultsCard(q, results, account, approximate) {
   const anyFree = results.some((b) => [b.pdf, b.epub].filter(Boolean).every(isFreeUrl));
   const cards = results.map((b, i) => {
     const formats = [b.pdf && FORMAT_LABEL.pdf, b.epub && FORMAT_LABEL.epub].filter(Boolean).join(" · ");
@@ -269,6 +269,7 @@ function resultsCard(q, results, account) {
   });
   return [
     `📖 <b>Results for</b> <i>“${esc(short(q, 80))}”</i>`,
+    approximate ? "🔍 <i>No exact match — here are the closest titles we found:</i>" : null,
     "",
     cards.join("\n\n"),
     "",
@@ -396,7 +397,7 @@ async function onMessage(event, message) {
   const statusId = status && status.message_id;
   await tg("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
 
-  const { results, failedSources } = await searchBooks(event, q);
+  const { results, failedSources, approximate } = await searchBooks(event, q);
   if (!results.length) {
     // every source failing is a different problem from "nothing matched"
     const down = failedSources.length >= 5;
@@ -406,11 +407,14 @@ async function onMessage(event, message) {
     ]);
     return void (await edit(chatId, statusId, down ? t.allFailed : t.none));
   }
-  await Promise.all([track(event, { search: 1, searchHit: 1 }), bumpTop(event, "queries", queryLabel(q.raw))]);
+  await Promise.all([
+    track(event, { search: 1, searchHit: 1, ...(approximate ? { searchApprox: 1 } : {}) }),
+    bumpTop(event, "queries", queryLabel(q.raw)),
+  ]);
 
   await saveResults(event, chatId, q.raw, results);
   const account = await getAccount(event, chatId);
-  await edit(chatId, statusId, resultsCard(q.raw, results, account), { reply_markup: resultsKeyboard(results) });
+  await edit(chatId, statusId, resultsCard(q.raw, results, account, approximate), { reply_markup: resultsKeyboard(results) });
 }
 
 // ---------------------------------------------------------------- button taps

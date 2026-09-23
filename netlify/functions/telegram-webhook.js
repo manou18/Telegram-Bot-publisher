@@ -24,6 +24,7 @@ const { recordThreadRoot, resolveThread } = require("../lib/commentThreads");
 const { packFromPayload } = require("../lib/botPlans");
 const { onGroupComment } = require("../lib/commentBot");
 const { processBotUpdate } = require("./bot-worker-background");
+const { safeCompare } = require("../lib/auth");
 
 // Telegram gives a bot only 10 seconds to approve a payment ("pre-checkout"), so this is answered
 // right here instead of going through the slower background worker. We approve it only if it
@@ -57,8 +58,16 @@ async function forwardToBotWorker(event, update) {
 
 exports.handler = async (event) => {
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!expectedSecret) {
+    // Fail closed: without a configured secret we can't tell a real Telegram update from a
+    // forged one (fake payments, fake admin commands...), so refuse everything rather than
+    // silently accepting unauthenticated requests — the opposite of what a missing secret
+    // should do.
+    console.error("TELEGRAM_WEBHOOK_SECRET is not set — refusing all webhook updates until it is configured.");
+    return { statusCode: 500, body: "Webhook secret not configured" };
+  }
   const providedSecret = (event.headers || {})["x-telegram-bot-api-secret-token"];
-  if (expectedSecret && providedSecret !== expectedSecret) {
+  if (!providedSecret || !safeCompare(providedSecret, expectedSecret)) {
     return { statusCode: 401, body: "Unauthorized" };
   }
 
